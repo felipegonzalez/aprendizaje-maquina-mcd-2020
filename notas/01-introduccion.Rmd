@@ -64,7 +64,7 @@ en foros?
 
 ## Ejemplo: reglas y aprendizaje
 
-Lectura de un medidor mediante imágenes. Supongamos que en
+*Lectura de un medidor mediante imágenes*. Supongamos que en
 una infraestructura donde hay medidores análogos (de electricidad, gas, etc.) que no se comunican. ¿Podríamos pensar en utilizar
 fotos tomadas automáticamente para medir el consumo?
 
@@ -99,9 +99,13 @@ aplicamos un umbral):
 
 ```{r}
 medidor_1 <- medidor %>% R %>% isoblur(10)
-aguja <-  medidor_1 %>% threshold("99%") 
+aguja <-  medidor_1 %>% threshold("99%")
+```
+
+
+```{r, echo=FALSE}
 layout(t(1:3))
-par(mar = c(2, 2, 2, 2))
+par(mar = c(1, 1, 1, 1))
 plot(medidor, axes = FALSE)
 plot(medidor_1, axes = FALSE)
 plot(aguja, axes = FALSE)
@@ -113,14 +117,18 @@ encendidos (transformada de Hough). Con estas líneas tenemos
 calculada la orientación de la aguja:
 
 ```{r, message=FALSE}
-lineas_h <- hough_line(aguja, ntheta = 500, data.frame=T)
+lineas_h <- hough_line(aguja, ntheta = 500, data.frame = T)
 lineas_top <- lineas_h %>% 
     arrange(desc(score)) %>% 
     top_n(5) %>% 
     select(-score)  
 lineas_top
+```
+
+
+```{r, message=FALSE, echo=FALSE}
 layout(matrix(1:4, 2))
-par(mar = c(2, 2, 2, 2))
+par(mar = c(1, 1, 1, 1))
 plot(medidor, axes = FALSE)
 plot(medidor_1, axes = FALSE)
 plot(aguja, axes = FALSE)
@@ -131,7 +139,7 @@ pwalk(lineas_top, nfline, col="red")
 Y ahora podemos aplicar el proceso de arriba
 a todas la imágenes:
 
-```{r, fig.width=6, fig.height = 4, out.width = "400px"}
+```{r}
 seleccionar_lineas <- function(lineas){
     lineas %>% 
       arrange(desc(score)) %>% 
@@ -183,7 +191,7 @@ library(keras)
 x <- as.array(medidor_vid) %>% aperm(c(3,1,2,4))
 
 # reordenamos
-set.seed(1234)
+set.seed(12334)
 orden <- sample(1:num_cuadros, num_cuadros)
 x <- x[orden,,,,drop=FALSE]
 y <- angulos[orden]
@@ -193,7 +201,7 @@ y <- angulos[orden]
 ```{r}
 modelo_aguja <- keras_model_sequential() %>%
     layer_flatten() %>% 
-    layer_dropout(rate = 0.95) %>% 
+    layer_dropout(rate = 0.9) %>% 
     layer_dense(units = 1, activation = 'linear')
 ```
 Ajustamos el modelo:
@@ -207,18 +215,21 @@ modelo_aguja %>% compile(
 # Entrenar
 modelo_aguja %>% fit(
   x, y,
-  batch_size = 20,
-  epochs = 200,
-  validation_split = 0.25
+  batch_size = 25,
+  epochs = 150,
+  validation_split = 0.1,
+  verbose = FALSE
 )
-
 ```
 
 Y observamos que obtenemos predicciones prometedoras:
 
 ```{r, out.width = '500px', fig.width = 6, fig.height = 4,}
 preds <- predict(modelo_aguja, x)
-qplot(y, preds, alpha =0.5) + geom_abline(slope = 1, intercept = 0, col = 'red')
+preds_tbl <- tibble(y = y, preds = preds)
+ggplot(preds_tbl, aes(x = preds, y = y)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(colour = 'red')
 ```
 
 De forma que podemos resolver este problema con algoritmos generales,
@@ -243,14 +254,12 @@ Por ejemplo, consideremos una muestra de la ENIGH 2010:
 dat_ingreso <- read_csv(file = '../datos/enigh-ejemplo.csv') %>% 
   mutate(num_focos = FOCOS) %>%
   mutate(ingreso_miles = round(INGCOR / 1000)) %>% 
-  #mutate(marginación = recode(marginación, Alto = "Alto", `Muy alto`= "Muy Alto",
-  #    Medio = "Medio", Bajo = "Medio", `Muy bajo`="Bajo")) %>% 
   mutate(tel_celular = ifelse(SERV_2 == 1, "Sí", "No")) %>% 
   mutate(marginación = fct_reorder(marginación, ingreso_miles, median)) %>% 
   rename(ocupadas = PEROCU)
 
 sample_n(dat_ingreso, 10) %>% 
-    select(entidad = NOM_ENT..307, num_focos, marginación, 
+    select(entidad = NOM_ENT, num_focos, marginación, 
            tel_celular, ocupadas, ingreso_miles)  %>%
     arrange(desc(ingreso_miles)) %>% 
     knitr::kable()
@@ -297,7 +306,7 @@ de la variación de los ingresos de los hogares. Sin embargo,
 ¿cómo podemos mejorar nuestras predicciones para el estrato de marginación
 muy alta, donde hay relativamente pocos datos, o para aquellos hogares
 con alto número de focos? Parece ser necesario incluír
-más variables, pero un enfoque ingenuo puede no dar muy buenas predicciones.
+más variables.
 
 
 - En algunas encuestas se pregunta directamente el ingreso mensual del hogar. La
@@ -880,9 +889,6 @@ consecuencias.
 y de entrenamiento continuo puede ser la diferencia entre entre un modelo exitoso o uno
 que se vuelve fuente de dificultades y confusión.
 
-- ¿Cuáles son los **sesgos** peligrosos o injustos de los modelos? ¿Podemos caer
-en círculos viciosos donde aprendemos cosas que al poner en producción amplifican situaciones 
-injustas?
 
 
 ## Resumen
