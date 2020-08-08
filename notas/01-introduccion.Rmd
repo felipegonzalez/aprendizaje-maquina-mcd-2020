@@ -368,31 +368,109 @@ decir predicción de variables numéricas.
 
 ¿Cómo entendemos el problema de predicción?
 
-### Proceso generador de datos (modelo teórico) {-}
+### Proceso generador de datos {-}
 
 Pensaremos en términos
-de **modelos probabilísticos que generan los datos**. La idea es que
-estos representan los procesos que generan los datos o las observaciones.
+de **procesos usualmente estocásticos que generan los datos**. Supongamos que nos
+interesa predecir una variable respuesta $Y$ numérica en términos de
+variables de entrada disponibles $x = (x_1,x_2,\ldots, x_p)$. Dadas
+las variables de entrada, observamos una salida:
 
-Si $Y$ es la respuesta
-que queremos predecir, y $X$ es una entrada que queremos usar para predecir
-$Y$,  
-consideramos que las variables aleatorias $Y$ y $X$ están relacionadas como sigue:
-$$Y=f(X)+\epsilon,$$
-donde $\epsilon$ es una término de error aleatorio 
-que tiene valor esperado $\textrm{E}(\epsilon | X)=0$ (su media no depende
-de los valores de las entradas).
+$$(x_1, x_2, \ldots, x_n) \to y$$
+
+y queremos predecir, para cada juego de entradas dada, qué valor de
+salida vamos a observar. El proceso que produce la salida $y$ a partir
+de las entradas es típicamente muy complejo y dificíl de describir de
+forma mecanística (por ejemplo, el ingreso dadas características de los hogares).
+En muchos casos, tiene sentido pensar que estos modelo son estocásticos y
+no deterministas, pues
+puede haber muchas otras variables no medidas (no incluidas en nuestras $x_i$'s)
+que influyen sobre $y$. Estas variables pueden ser modeladas de forma probabilista.
+
+Nuestro primer propósito es construir una función $f$ tal que si observamos
+cualquier $(x_1, x_2, \ldots, x_n) \to y$, entonces
+
+$$y_f = f(x_1, x_2, \ldots, x_n) \approx y$$
+es decir, con una regla o algoritmo $f$ podemos _predecir con buena precisión_ 
+el valor de $y$. Esta $f$, como explicamos antes, puede ser producida de muy distintas
+maneras (experiencia, reglas a mano, datos, etc.) En cualquier caso,
+nuestra primera tarea es definir qué quiere decir _predecir con buena precisión_ 
+
+Distintos problemas tendrán distintas maneras de definir qué es una buena predicción,
+que también depende de cuál es la razón por la que construimos estos modelos.
+
+#### Ejemplo {-}
+
+Para predecir el precio de venta de una casa en el mercado usamos la función
+
+$$ f(x) = f(m2, calidad) = (1000 + 50 * calidad ) * m^2  $$
+
+donde *m^2* es el área de las casas, y *calidad* es una calificación de los
+terminados de la casa. ¿Cómo mediríamos el desempeño de esta regla?
+
+La respuesta más directa es: tomamos una muestra de casas que se han vendido
+recientemente y registramos su precio de venta (ventas que ocurrieron típicamente
+después de que construimos la función $f$:
+
+$$(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)}),$$
+
+Calcularíamos el **error de predicción** para cada caso:
+
+$$\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})$$
+y observaríamos cómo se comportan estos errores (¿son muy grandes? ¿subestimamos o sobrestimamos mucho?, etc ). 
+
+---
+
+Más precisamente, comparamos 
+observados con las predicciones de $f$ con una _función de pérdida_. En este
+caso, por ejemplo, podríamos usar
 
 
-- $f$ expresa la relación sistemática que hay entre $Y$ y $X$: para cada valor
-posible de $X$, la *contribución* de $X$ a $Y$ es $f(X)$. Típicamente
-es una función complicada de $X$.
-- Pero $X$ **no determina** a $Y$, como en el ejemplo anterior de rendimiento
-de coches.
-Entonces agregamos una error aleatorio $\epsilon$, con media cero (si la media
-no es cero podemos agregar una constante a $f$).
-- $\epsilon$ representa, por ejemplo, el efecto de variables que no hemos
-medido o  procesos aleatorios que determinan la respuesta.
+$$L \left(f(\mathbf{x}^{(i)}), \mathbf{y}^{(i)}\right ) = \left |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})\right |$$
+
+que es valor absoluto de la diferencia entre el precio de venta observado
+y el nuestra predicción. Pero quizá nos interese más el error relativo:
+
+$$L \left (f(\mathbf{x}^{(i)}), \mathbf{y}^{(i)}\right ) = \frac{\left |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})\right |}{f(\mathbf{x}^{(i)})}$$
+A la función $L$ le llamamos la **función de pérdida**, y con ella evaluamos
+el tamaño de los errores de predicción.
+
+Obsérvese que en general es posible que para algunos casos tengamos errores grandes
+pero que en general el comportamiento sea adecuado, y eso no querría decir necesariamente
+que nuestra regla $f$ es un mal predictor. Una idea simple es resumir evaluando
+el error promedio sobre los datos de prueba. El **error de prueba** de $f$
+sobre los datos es 
+
+$$ \widehat{Err} = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)}))2$$
+Por ejemplo, si usamos la pérdida absoluta, 
+
+$$ \widehat{Err} = \frac{1}{m} \sum_{j=1}^m |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})|$$
+o la cuadrática:
+
+$$ \widehat{Err} = \frac{1}{m} \sum_{j=1}^m (\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})^2$$
+Aunque podríamos usar también error absoluto u otra medida más interpretable o apropiada para nuestro problema. Esta cantidad estima el **error predictivo**, y le llamamos
+**error de prueba**. A los datos que usamos le llamamos el **conjunto de datos de prueba**.
+
+En el caso donde tenemosel conjunto de datos de muestra es una muestra iid del proceso
+generador de datos, esta cantidad estima la pérdida esperada
+
+$$E_\pi(L(y, f(x)))$$
+donde el valor esperado es sobre la distribución conjunta de $(x, y) ~ \pi$. Nuestro
+propósito es minimizar esta pérdida esperada.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
