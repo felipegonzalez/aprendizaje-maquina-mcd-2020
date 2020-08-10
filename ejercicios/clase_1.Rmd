@@ -74,7 +74,7 @@ De referencia ponemos la verdadera $f(x)$.
 
 ```{r}
 datos_f <- tibble(x = seq(0, 25, 0.01)) %>% 
-  mutate(.pred = f(x)) %>% 
+  mutate(.pred = f_real(x)) %>% 
   mutate(nombre = "verdadera f")
 datos_entrena <- genera_datos(30)
 mod_1 <- modelo_lineal %>% fit(y ~ x, datos_entrena)
