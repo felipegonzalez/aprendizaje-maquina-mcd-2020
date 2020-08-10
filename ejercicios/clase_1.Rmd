@@ -1,0 +1,95 @@
+---
+title: "Clase 1"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+```
+
+Código para simular datos:
+
+```{r}
+f_real <- function(x){
+  ifelse(x < 10, 1000*sqrt(x), 1000*sqrt(10))
+}
+genera_datos <- function(n = 100){
+  x <- runif(n, 0, 25)
+  y <- f_real(x) + rnorm(n, 0, 500)
+  tibble(x = x, y = y)
+}
+calcular_grafica <- function(mod, nombre = ""){
+  datos_g <- tibble(x = seq(0, 25, 0.01))
+  datos_g <- predict(mod, datos_g) %>% 
+    bind_cols(datos_g)
+  datos_g %>% mutate(nombre = nombre)
+}
+```
+
+Los métodos que usaremos:
+
+```{r, message = FALSE, warning=FALSE}
+modelo_lineal <- linear_reg() %>% 
+  set_engine("lm")
+modelo_svm <- svm_poly() %>% 
+  set_engine("kernlab") %>% 
+  set_mode("regression")
+```
+
+Simulamos datos de entrenamiento:
+
+```{r}
+set.seed(8181)
+datos <- genera_datos(30)
+```
+
+
+```{r, message = FALSE, warning=FALSE}
+# Ajuste
+mod_1 <- modelo_lineal %>% fit(y ~ x, datos)
+mod_2 <- modelo_svm %>% set_args(cost = 0.1, degree = 3) %>% 
+  fit(y ~ x, datos)
+mod_3 <- modelo_svm %>% set_args(cost = 100, degree = 8) %>% 
+  fit(y ~ x, datos)
+```
+
+Repetir gráfica
+
+```{r, fig.width=7, fig.asp=0.7}
+datos_1 <- calcular_grafica(mod_1, "modelo 1")
+datos_2 <- calcular_grafica(mod_2, "modelo 2")
+datos_3 <- calcular_grafica(mod_3, "modelo 3")
+datos_g <- bind_rows(datos_1, datos_2, datos_3)
+ggplot(datos, aes(x = x)) +
+  geom_line(data = datos_g, aes(y = .pred, colour = nombre, group = nombre), size = 1.5) +
+    geom_point(aes(y = y)) 
+```
+
+
+## Sesgo y varianza
+
+Repite con distintas muestras de entrenamiento. Describe cómo se comporta cada ajuste.
+De referencia ponemos la verdadera $f(x)$.
+
+```{r}
+datos_f <- tibble(x = seq(0, 25, 0.01)) %>% 
+  mutate(.pred = f(x)) %>% 
+  mutate(nombre = "verdadera f")
+datos_entrena <- genera_datos(30)
+mod_1 <- modelo_lineal %>% fit(y ~ x, datos_entrena)
+mod_2 <- modelo_svm %>% set_args(cost = 0.1, degree = 3) %>% 
+  fit(y ~ x, datos_entrena)
+mod_3 <- modelo_svm %>% set_args(cost = 100, degree = 8) %>% 
+  fit(y ~ x, datos_entrena)
+datos_1 <- calcular_grafica(mod_1, "modelo 1")
+datos_2 <- calcular_grafica(mod_2, "modelo 2")
+datos_3 <- calcular_grafica(mod_3, "modelo 3")
+# escoge cuáles graficar
+datos_g <- bind_rows(datos_1, datos_2, datos_3, datos_f)
+ggplot(datos, aes(x = x)) +
+  geom_line(data = datos_g, aes(y = .pred, colour = nombre, group = nombre), size = 1.5) +
+    geom_point(aes(y = y)) +
+  ylim(c(-500, 4500))
+```
+
