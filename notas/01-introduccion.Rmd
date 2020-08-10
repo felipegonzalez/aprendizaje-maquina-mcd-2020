@@ -377,7 +377,7 @@ interesa predecir una variable respuesta $Y$ numérica en términos de
 variables de entrada disponibles $x = (x_1,x_2,\ldots, x_p)$. Dadas
 las variables de entrada, observamos una salida:
 
-$$(x_1, x_2, \ldots, x_n) \to y$$
+$$(x_1, x_2, \ldots, x_p) \to y$$
 
 y queremos predecir, para cada juego de entradas dado, qué valor de
 salida vamos a observar. El proceso que produce la salida $y$ a partir
@@ -389,10 +389,10 @@ puede haber muchas otras variables no medidas (no incluidas en nuestras $x_i$'s)
 que influyen sobre $y$. 
 
 Nuestro primer propósito es construir una función $f$ tal que si observamos
-cualquier $(x_1, x_2, \ldots, x_n) \to y$, entonces nuestra predicción es
+cualquier $(x_1, x_2, \ldots, x_p) \to y$, entonces nuestra predicción es
 
-$$\hat{y} = f(x_1, x_2, \ldots, x_n)$$
-Y buscamos que en cada caso $f(x_1, x_2 \ldots, x_n) \approx y$,
+$$\hat{y} = f(x_1, x_2, \ldots, x_p)$$
+Y buscamos que en cada caso $f(x_1, x_2 \ldots, x_p) \approx y$,
 es decir, con una regla o algoritmo $f$ podemos **predecir** con buena precisión 
 el valor de $y$. Esta $f$, como explicamos antes, puede ser producida de muy distintas
 maneras (experiencia, reglas a mano, datos, etc.) En cualquier caso,
