@@ -7,7 +7,11 @@
 ```{r, include = FALSE}
 library(ggplot2)
 theme_set(theme_minimal(base_size = 13))
-cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+cbb_palette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+scale_colour_discrete <- function(...) {
+  scale_colour_manual(..., values = cbb_palette)
+}
+
 ```
 
 Métodos **computacionales** para **aprender de datos**  con el fin
@@ -318,14 +322,14 @@ ocupación, número de focos en el hogar, etc.)
 
 
 
-## Supervisado y no supervisado
+## Aprendizaje supervisado y no supervisado
 
 Las tareas de aprendizaje se dividen en dos grandes partes: aprendizaje
 supervisado y aprendizaje no supervisado.
 
 
-- **Aprendizaje supervisado** Construir un modelo o algoritmo para
-predecir o estimar un *target* o una *variable de salida* a partir
+En **Aprendizaje supervisado** buscamos construir un modelo o algoritmo para
+predecir o estimar un *target* o una *respuesta* a partir
 de ciertas variables de entrada.
 
 Predecir y estimar, en este contexto, se refieren a cosas similares. Generalmente
@@ -349,10 +353,9 @@ de estimación de ingreso es un problema de regresión
 - Problemas de **clasificación**: cuando la salida es una variable categórica. El
 ejemplo de detección de dígitos escritos a manos es un problema de clasificación.
 
-#### Aprendizaje no supervisado {-}
 
--  **Aprendizaje no supervisado** En este caso no hay *target*
-o variable salida. Buscamos modelar y entender las relaciones entre variables
+En contraste, en  **Aprendizaje no supervisado**  no hay *target*
+o variable respuesta. Buscamos modelar y entender las relaciones entre variables
 y entre observaciones, o patrones importantes o interesantes en los datos.
 
 Los problemas supervisados tienen un objetivo claro: hacer las mejores
@@ -361,208 +364,191 @@ tienden a tener objetivos más vagos, y por lo mismo pueden ser más difíciles.
 
 
 
-## Aprendizaje Supervisado
+## Predicciones y su evaluación
 
 Por el momento nos concentramos en problemas supervisados de regresión, es
-decir predicción de variables numéricas.
+decir predicción de variables numéricas. ¿Cómo entendemos el problema de predicción?
 
-¿Cómo entendemos el problema de predicción?
-
-### Proceso generador de datos (modelo teórico) {-}
+### Proceso generador de datos {-}
 
 Pensaremos en términos
-de **modelos probabilísticos que generan los datos**. La idea es que
-estos representan los procesos que generan los datos o las observaciones.
+de **procesos usualmente estocásticos que generan los datos**. Supongamos que nos
+interesa predecir una variable respuesta $Y$ numérica en términos de
+variables de entrada disponibles $x = (x_1,x_2,\ldots, x_p)$. Dadas
+las variables de entrada, observamos una salida:
 
-Si $Y$ es la respuesta
-que queremos predecir, y $X$ es una entrada que queremos usar para predecir
-$Y$,  
-consideramos que las variables aleatorias $Y$ y $X$ están relacionadas como sigue:
-$$Y=f(X)+\epsilon,$$
-donde $\epsilon$ es una término de error aleatorio 
-que tiene valor esperado $\textrm{E}(\epsilon | X)=0$ (su media no depende
-de los valores de las entradas).
+$$(x_1, x_2, \ldots, x_n) \to y$$
+
+y queremos predecir, para cada juego de entradas dado, qué valor de
+salida vamos a observar. El proceso que produce la salida $y$ a partir
+de las entradas es típicamente muy complejo y dificíl de describir de
+forma mecanística (por ejemplo, el ingreso dadas características de los hogares).
+En muchos casos, tiene sentido pensar que estos modelo son estocásticos y
+no deterministas, pues
+puede haber muchas otras variables no medidas (no incluidas en nuestras $x_i$'s)
+que influyen sobre $y$. 
+
+Nuestro primer propósito es construir una función $f$ tal que si observamos
+cualquier $(x_1, x_2, \ldots, x_n) \to y$, entonces nuestra predicción es
+
+$$\hat{y} = f(x_1, x_2, \ldots, x_n)$$
+Y buscamos que en cada caso $f(x_1, x_2 \ldots, x_n) \approx y$,
+es decir, con una regla o algoritmo $f$ podemos **predecir** con buena precisión 
+el valor de $y$. Esta $f$, como explicamos antes, puede ser producida de muy distintas
+maneras (experiencia, reglas a mano, datos, etc.) En cualquier caso,
+nuestra primera tarea es definir qué quiere decir _predecir con buena precisión_. 
+
+Distintos problemas tendrán distintas maneras de definir qué es una buena predicción,
+que también depende de cuál es la razón por la que construimos estos modelos.
+
+#### Ejemplo {-}
+
+Para predecir el precio de venta de una casa en el mercado usamos la función
+
+$$ f(x) = f(m2, calidad) = (10000 + 500 * calidad ) * m^2  $$
+
+donde *m^2* es el área de las casas, y *calidad* es una calificación de los
+terminados de la casa. ¿Cómo mediríamos el desempeño de esta regla?
 
 
-- $f$ expresa la relación sistemática que hay entre $Y$ y $X$: para cada valor
-posible de $X$, la *contribución* de $X$ a $Y$ es $f(X)$. Típicamente
-es una función complicada de $X$.
-- Pero $X$ **no determina** a $Y$, como en el ejemplo anterior de rendimiento
-de coches.
-Entonces agregamos una error aleatorio $\epsilon$, con media cero (si la media
-no es cero podemos agregar una constante a $f$).
-- $\epsilon$ representa, por ejemplo, el efecto de variables que no hemos
-medido o  procesos aleatorios que determinan la respuesta.
+### Datos de prueba y función de pérdida {-}
+
+
+La respuesta más directa es: tomamos una muestra de casas que se han vendido
+recientemente y registramos su precio de venta (ventas que ocurrieron típicamente
+después de que construimos la función $f$:
+
+$${\mathcal T} = \{(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)})\},$$
+
+Compararíamos entonces las respuestas observadas $\mathbf{y^{(i)}}$ con las
+predicciones $f(\mathbf{y^{(i)}})$. ¿Las diferencias son muy grandes? ¿subestimamos o sobrestimamos mucho?, etc ). 
+
+Más precisamente, comparamos 
+observados con las predicciones de $f$ con una _función de pérdida_. En este
+caso, por ejemplo, podríamos usar
+
+
+$$L \left(f(\mathbf{x}^{(i)}), \mathbf{y}^{(i)}\right ) = \left |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})\right |$$
+
+que es valor absoluto de la diferencia entre el precio de venta observado
+y el nuestra predicción. Pero quizá nos interese por conveniencia más el error cuadrático:
+
+$$L \left (f(\mathbf{x}^{(i)}), \mathbf{y}^{(i)}\right ) =\left(\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})\right )^2$$
+A la función $L$ le llamamos la **función de pérdida**, y con ella evaluamos
+el tamaño de los errores de predicción.
+
+Obsérvese que en general es posible que para algunos casos tengamos errores grandes
+pero que en general el comportamiento sea adecuado, y eso no querría decir necesariamente
+que nuestra regla $f$ es un mal predictor en general. Una idea simple es resumir evaluando
+el error promedio sobre los datos de prueba. El **error de prueba** de $f$ es
+
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)}))$$
+Por ejemplo, si usamos la pérdida absoluta, 
+
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})|$$
+o la cuadrática:
+
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m (\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)}))^2$$
+Aunque podríamos usar también error relativo u otra medida más 
+interpretable o apropiada para nuestro problema.  A esta última cantidad le llamamos 
+**error de prueba**. A los datos que usamos para calcularla 
+le llamamos el **conjunto de datos de prueba**.
 
 
 
 #### Ejemplo {-}
 
-Vamos a usar simulación para entender estas ideas: supongamos que $X$
-es el número de años de estudio de una persona y $Y$ es su ingreso mensual.
-En primer lugar, estas son el número de años de estudio de 8 personas:
+Para la función que mostramos arriba que quisiéramos usar para predecir 
+precios de ventas de casas, usando la pérdida absoluta tendríamos:
 
-```{r, fig.width=5, fig.asp=0.7}
-x <- c(1,7,10,0,0,5,9,13,2,4,17,18,1,2)
-```
-
-Ahora *supondremos* que la dependencia de Y de X está dada por
-$Y=f(X)+\epsilon$ por una función $f$ que no conocemos (esta función está
-determinada por el fenómeno)
 ```{r}
-f <- function(x){
-  ifelse(x < 10, 1000*sqrt(x), 1000*sqrt(10))
+f <- function(m2, calidad){
+  (10000 + 500 * calidad ) * m2 
+}
+L <- function(y, pred){
+  abs(y - pred)
 }
 ```
 
-El ingreso no se determina
-únicamente por número de años de estudio. Suponemos entonces que hay algunas 
-variables
-adicionales que perturban los niveles de $f(X)$ por una cantidad aleatoria. Los
-valores que observamos de $Y$ están dados entonces por $Y=f(X)+\epsilon$.
+Una vez que tenemos $f$, podemos recolectar una muestra de prueba de casas que
+se han vendido recientemente (en este caso 100 casas):
 
-Entonces podríamos obtener, por ejemplo:
-```{r, fig.width=5, fig.asp=0.7}
-x_g <- seq(0,20,0.5)
-y_g <- f(x_g)
-dat_g <- tibble(x = x_g, y = y_g)
-set.seed(281)
-error <- rnorm(length(x), 0, 500)
-y <- f(x) + error
-datos <- tibble(x = x, y = y)
-datos$y_media <- f(datos$x)
-ggplot(datos, aes(x = x, y = y)) + geom_point() +
-  geom_line(data=dat_g, colour = 'blue', size = 1.1) +
-  geom_segment(aes(x = x, xend = x, y = y, yend = y_media), col='red')
+```{r, echo=FALSE, include=FALSE}
+set.seed(2321)
+datos_prueba <- tibble(m2 = runif(100, 60, 1000) %>% round(2),
+                       calidad = sample(1:10, 100, replace = TRUE)) %>% 
+  mutate(pred = f(m2, calidad)) %>% 
+  mutate(precio = (pred + rnorm(100, 0, 400000))/1000  ) %>%
+  mutate(precio = 1000*round(precio, 1)) %>% 
+  select(m2, calidad, precio)
 ```
 
-
-En problemas de aprendizaje nunca conocemos esta $f$ verdadera,
-aunque quizá sabemos algo acerca de sus propiedades (por ejemplo, continua, de 
-variación suave). Lo que tenemos son los datos, que también podrían haber resultado
-en (para otra muestra de personas, por ejemplo):
-
-```{r, fig.width=5, fig.asp=0.7}
-set.seed(28015)
-error <- rnorm(length(x), 0, 500)
-y <- f(x) + error
-datos <- tibble(x = x, y = y)
-ggplot(datos, aes(x = x, y = y)) + geom_point() 
-```
-
-La siguiente observación nos da una idea de lo que intentamos hacer, aunque
-todavía es vaga y requiere refinamiento:
-
-```{block, type='comentario'}
-Bajo los supuestos del modelo $Y=f(X)+\epsilon$, **aprender de los datos**
-significa intentar recuperar o estimar la forma de la función $f$ que no conocemos.
-$f$ representa la relación sistemática entre $Y$ y $X$.
-```
-
-¿Qué tan bien podemos estimar esa $f$ que no conocemos, con
-los datos disponibles? ¿Qué significa *estimar bien*?
-Incluso este ejemplo tan simple muestra las dificultades que vamos a
-enfrentar, y la importancia de determinar con cuidado qué tanta información
-tenemos, y qué tan buenas pueden ser nuestras predicciones.
-
-### Predicciones {-}
-
-La idea es entonces producir una estimación de f que nos permita hacer predicciones.
-
-Si denotamos por $\hat{f}$ a una estimación de $f$ construida a partir de los datos,
-podemos hacer predicciones aplicando $\hat{f}$ a valores de $X$.
-La predicción de Y la denotamos por $\hat{Y}$, y $$\hat{Y}=\hat{f}(X).$$
-El error de predicción (residual) está dado por el valor observado menos la predicción:
-$$Y-\hat{Y}.$$
-
-
-En nuestro ejemplo anterior, podríamos construir, por ejemplo, una recta
-ajustada por mínimos cuadrados:
 
 ```{r}
-curva_1 <- geom_smooth(data=datos,
-  method = "lm", se=FALSE, color="red", formula = y ~ x, size = 1.1)
+datos_prueba %>% head()
 ```
-
-```{r, fig.width=5, fig.asp=0.7}
-ggplot(datos, aes(x = x, y = y)) + geom_point() + curva_1
-```
-
-En este caso $\hat{f}$  es una recta, y la podemos usar para hacer predicciones.
-Por ejemplo, si tenemos una observación con
-$x_0=8$ años de estudio, nuestra predicción del ingreso 
-$\hat{y}=\hat{f}(8)$ sería
+Y evaluamos el error de prueba:
 
 ```{r}
-lineal <- lm(y ~ x,data = datos)
-pred_1 <- predict(lineal, newdata = data.frame(x=8))
-pred_1
+datos_prueba %>% 
+  mutate(pred = f(m2, calidad)) %>% #calcular predicción
+  mutate(perdida_abs = L(precio, pred)) %>% #calcular pérdida
+  summarise(predida_prueba = mean(perdida_abs) %>% round(2)) # promediar
 ```
+Este es el error promedio que esperamos cuando usamos este predictor. En este
+ejemplo, nos podría también interesar calcular el error relativo, que introduce una medida
+de pérdida distinta:
 
-```{r, fig.width=5, fig.asp=0.7}
-ggplot(datos, aes(x = x, y = y)) + geom_point() + curva_1 +
-  geom_segment(x = 0, xend = 8, y = pred_1, yend = pred_1, colour = 'salmon') +
-  geom_segment(x = 8, xend = 8, y = 0, yend = pred_1, colour = 'salmon') +
-  annotate('text', x = 0.5, y = pred_1 + 100, label = round(pred_1, 1)) +
-  geom_point( x= 8, y =3200, col='green', size = 4)
-```
-
-Si observamos que para esta observación con $x_0=8$, resulta que 
-el correspondiente ingreso es $y_0=3200$, entonces el error sería
 ```{r}
-y_0 <- 3200
-y_0 - pred_1
+L_relativa <- function(y, pred){
+  100 * abs(y - pred) / pred
+}
+datos_prueba %>% 
+  mutate(pred = f(m2, calidad)) %>% #calcular predicción
+  mutate(perdida_abs = L_relativa(precio, pred)) %>% #calcular pérdida
+  summarise(predida_prueba = mean(perdida_abs) %>% round(2)) # promediar
 ```
 
-
-```{block, type='comentario'}
-En aprendizaje buscamos que estos errores sean lo más cercano a cero que
-sea posible.
-```
-
-## Tarea de aprendizaje supervisado {#aprendizaje}
-
-El elemento faltante para definir la tarea de aprendizaje supervisado es 
-cuantificar qué significa aproximar *bien* a $f$, o tener predicciones precisas. Para
-esto definimos una **función de pérdida**:
-
-$$L(Y, \hat{f}(X)),$$
-
-que nos dice cuánto nos cuesta hacer la predicción $\hat{f}(X)$ cuando el
-verdadero valor es $Y$ y las variables de entrada son $X$. 
-Una opción conveniente para problemas de regresión
-es la **pérdida cuadrática**:
-
-$$L(Y, \hat{f}(X)) =  (Y - \hat{f}(X))^2$$
-Esta es una cantidad aleatoria, de modo que en algunos casos este error
-puede ser más grande o más chico, aún para la misma predicción. 
-Usualmente buscamos una $\hat{f}$ de modo que el error promedio sea chico:
-
-$$Err = E (Y - \hat{f}(X))^2 $$
-
-**Notas**:
-
-- Este valor esperado es sobre la población para la que queremos hacer
-predicciones. Es una cantidad teórica, no podemos calcularla con ningún
-conjunto de datos.
-- Intenta demostrar que bajo error cuadrático medio y suponiendo
-el modelo aditivo $Y=f(X)+\epsilon$, el mejor predictor
-de $Y$ es $f(x)= E[Y|X=x]$. Es decir: lo que nos interesa es aproximar
-lo mejor que se pueda la esperanza condicional
 
 ---
 
-Ahora tenemos los elementos para definir con precisión el problema
-de aprendizaje supervisado. 
 
-Consideramos un proceso generador de datos $(X,Y)$. 
+En el caso donde los datos de prueba son una muestra (datos independientes
+e identicamente distribuidos) extraida
+del proceso generador de datos, esta cantidad estima el **error predictivo**:
 
-En primer lugar,
-tenemos datos de los que vamos a aprender. Supongamos entonces que tenemos un conjunto de datos *etiquetados* (generados según $(X,Y)$)
+$$ Err(f) = E_{(x,y)}\left( L(y, f(x))\right ) $$
+donde el valor esperado es sobre la distribución conjunta de $(x, y) \sim \pi$. Nótese
+que esta es una cantidad teórica que tenemos que estimar. Si la muestra de prueba
+es suficientemente grande ( $m$ es grande ), entonces
+
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) \approx Err(f)$$
+**Observación**: nótese que para que este argumento funcione, la $f$ no puede
+depender de ninguna manera de los datos de prueba 
+$(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)}),$ pues entonces tendríamos que tomar
+el valor esperado promediando sobre $f$, y esta promedio **no** estima $Err(f)$
+
+
+```{block2, type="comentario"}
+- Nuestro propósito principal es encontrar una $f$ para predecir que minimice
+el error predictivo
+- En la práctica, buscamos valores chicos del error de prueba $\widehat{Err}$ 
+  (que aproxima al error predictivo).
+- La  $f$ no puede
+depender de ninguna manera de los datos de prueba.
+```
+
+
+
+## Tarea fundamental del aprendizaje supervisado {#aprendizaje}
+
+En aprendizaje supervisado, buscamos construir la función $f$ de manera
+automática usando datos. Supongamos entonces que tenemos un conjunto de datos *etiquetados*
+(sabemos la $y$ correspondiente a cada $x$):
 
 $${\mathcal L}=\{ (x^{(1)},y^{(1)}),(x^{(2)},y^{(2)}), \ldots, (x^{(N)}, y^{(N)}) \}$$
-que llamamos **conjunto de entrenamiento**. Nótese que usamos minúsculas
-para denotar observaciones particulares de $(X,Y)$.
+
+que llamamos **conjunto de entrenamiento**.
 
 Un **algoritmo de aprendizaje** (**aprender** de los datos)
 es una regla que asigna a cada conjunto de
@@ -574,18 +560,17 @@ Una vez que construimos la función $\hat{f}$, podemos hacer predicciones.
 El desempeño del predictor particular $\hat{f}$ se mide como sigue: si
 en el futuro observamos otra muestra ${\mathcal T}$, que llamamos **muestra de prueba**,
 
-$${\mathcal T}=\{ (x_0^{(1)},y_0^{(1)}),(x_0^{(2)},y_0^{(2)}), \ldots, (x_0^{(m)}, y_0^{(m)}) \}$$
+$${\mathcal T} = \{(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)})\},$$
 
 entonces decimos que el **error de predicción** (cuadrático) de $\hat{f}$ para el
-ejemplo $(x_0^{(j)},y_0^{(j)})$ está dado por
-$$(y_0^{(j)} - \hat{f}(x_0^{(j)}))^2$$
+ejemplo $(\mathbf{x^{(j)}},\mathbf{y}^{(j)})$ está dado por
+$$L(\mathbf{y}^{(j)} , \hat{f}(\mathbf{x}^{(j)}))$$
 
 y el error promedio sobre la muestra ${\mathcal T}$ es
 
-$$\hat{Err} =   \frac{1}{m}\sum_{j=1}^m (y_0^{(j)} - \hat{f}(x_0^{(j)}))^2$$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) $$
 
-que es una estimación del error de predicción 
-$$Err = E (Y - \hat{f}(X))^2 $$
+que es una estimación del error de predicción $Err$
 
 Adicionalmente, definimos otra cantidad de menor interés,
 el **error de entrenamiento**, como 
@@ -593,7 +578,7 @@ el **error de entrenamiento**, como
 $$\overline{err} = \frac{1}{N}\sum_{i=1}^N (y^{(i)} - \hat{f}(x^{(i)}))^2.$$
 
 ```{block2, type='comentario'}
-En aprendizaje supervisado,
+La **tarea fundamental del análisis supervisado** es:
 
 - Usando datos de entrenamiento ${\mathcal L}$, construimos una funcion $\hat{f}$ para predecir
 - Si observamos nuevos valores $x_0$, nuestra predicción es $\hat{y} = \hat{f}(x_0)$.
@@ -601,11 +586,10 @@ En aprendizaje supervisado,
 sea bajo en promedio ($Err$ sea bajo)
 - Usualmente estimamos $Err$ mediante una muestra de prueba o validación ${\mathcal T}$, así
 que buscamos minimizar la estimación $\hat{Err}$
-
+- Nos interesan métodos de construir $\hat{f}$ que produzcan errores de predicción bajos.
 ```
 
 
-El punto más importante que discutiremos ahora es el siguiente:
 
 - Nótese que el error de entrenamiento se calcula sobre la muestra ${\mathcal L}$
 que se usó
@@ -616,111 +600,238 @@ una muestra independiente ${\mathcal T}$.
 crece), pero $\overline{err}$ típicamente es **una estimación mala del error de
 predicción**.
 
+
 #### Ejemplo {-}
 
-En el ejemplo que hemos estado usando, ¿que curva preferirías para
-predecir, la gris, la roja o la azul? ¿Cuál tiene menor error de entrenamiento?
-
-```{r, fig.width=5, fig.asp=0.7}
-set.seed(280572)
-error <- rnorm(length(x), 0, 500)
-y <- f(x) + error
-datos_entrena <- data.frame(x = x, y = y)
-head(datos_entrena)
-curva_1 <- geom_smooth(data = datos_entrena,
-  method = "loess", se = FALSE, color = "gray", span = 1, size = 1.1)
-curva_2 <- geom_smooth(data = datos_entrena,
-  method = "loess", se = FALSE, color = "red", span = 0.5, size = 1.1)
-curva_3 <- geom_smooth(data = datos_entrena,
-  method = "lm", se = FALSE, color = "blue", size = 1.1)
-```
-
-```{r, fig.width=5, fig.asp=0.7, warning = FALSE}
-ggplot(datos_entrena, aes(x=x, y=y)) + geom_point() + 
-    curva_1 + curva_2 + curva_3
-```
-
-
-Calculamos los errores de entrenamiento de cada curva:
-
-```{r, warning = FALSE}
-mod_rojo <- loess(y ~ x, data = datos_entrena, span=0.3)
-mod_gris <- loess(y ~ x, data = datos_entrena, span=1)
-mod_recta <- lm(y ~ x, data = datos_entrena)
-df_mods <- tibble(nombre = c('recta', 'rojo', 'gris'))
-df_mods$modelo <- list(mod_recta, mod_rojo, mod_gris)
-```
+Vamos a usar simulación para entender estas ideas. Normalmente las muestras
+de entrenamiento y prueba se extraen del proceso que nos interesa. En este
+ejemplo simple, usamos simulación usando el siguiente método que se supone
+no conocemos.
 
 ```{r}
-error_f <- function(df, mod){
-  function(mod){
-    preds <- predict(mod, newdata = df)
-    round(sqrt(mean((preds - df$y) ^ 2)))
-  }
+f_real <- function(x){
+  ifelse(x < 10, 1000*sqrt(x), 1000*sqrt(10))
 }
-error_ent <- error_f(datos_entrena)
-
-df_mods <- df_mods %>% 
-  mutate(error_entrena = map_dbl(modelo, error_ent))
-df_mods
+genera_datos <- function(n = 100){
+  x <- runif(n, 0, 25)
+  y <- f_real(x) + rnorm(n, 0, 500)
+  tibble(x = x, y = y)
+}
 ```
 
-El error de entrenamiento es considerablemente menor para la curva
-roja, y es más grande para la recta.
+El método que usaremos por el momento es mínimos cuadrados, que ajusta
+una recta $y = a + bx$ a los datos.
 
-Sin embargo, consideremos que tenemos una nueva muestra (de prueba).
+```{r, message = FALSE, warning=FALSE}
+library(tidymodels)
+modelo_lineal <- linear_reg() %>% 
+  set_engine("lm")
+```
 
-```{r, fig.width=5, fig.asp=0.7}
-set.seed(218052272)
-x_0 <- sample(0:13, 100, replace = T)
-error <- rnorm(length(x_0), 0, 500)
-y_0 <- f(x_0) + error
-datos_prueba <- tibble(x = x_0, y = y_0)
-datos_prueba
+
+
+Por ejemplo, tenemos la siguiente muestra de entrenamiento:
+
+```{r}
+set.seed(8181)
+datos <- genera_datos(30)
+datos
 ```
 
 ```{r}
-error_p <- error_f(datos_prueba)
-df_mods <- df_mods %>% 
-  mutate(error_prueba = map_dbl(modelo, error_p))
-df_mods
+ggplot(datos, aes(x = x, y = y)) + geom_point()
 ```
 
-y el error de prueba más bajo está dado por la curva gris.
+Ahora podemos usar nuestro algoritmo para construir un predictor, en este
+caso ajustando por mínimos cuadrados:
+
+```{r}
+mod_1 <- modelo_lineal %>% fit(y ~ x, datos)
+```
+
+```{r, fig.width=5, fig.asp=0.7}
+calcular_grafica <- function(mod, nombre = ""){
+  datos_g <- tibble(x = seq(0, 25, 0.01))
+  datos_g <- predict(mod, datos_g) %>% 
+    bind_cols(datos_g)
+  datos_g %>% mutate(nombre = nombre)
+}
+datos_g <- calcular_grafica(mod_1)
+ggplot(datos, aes(x = x)) +
+  geom_point(aes(y = y)) +
+  geom_line(data = datos_g, aes(y = .pred), colour = "red")
+```
+Ahora tenemos que evaluar este modelo. No podemos usar la muestra
+de entrenamiento que ya usamos para ajustar la recta. Supongamos entonces
+que extraemos una muestra grande de prueba:
+
+```{r}
+datos_prueba <- genera_datos(n = 1000)
+```
+
+Y finalmente evaluamos nuestro modelo. Usaremos la raíz de la pérdida cuadrática:
+
+```{r}
+error_1 <- predict(mod_1, datos_prueba) %>% 
+  bind_cols(datos_prueba) %>% 
+  rmse(truth = y, estimate = .pred)
+error_1
+```
+### Importancia de la tarea supervisada {-}
+
+Esta formulación de la tarea de aprendizaje supervisado 
+ha sido muy productiva (@donoho50), y ha permitido
+avances grandes en muchos problemas interesantes desde hace unas cuantas décadas. En parte
+es porque 
+ esta formulación es relativamente fácil de implementar
+para agregar contribuciones de muchas personas. Sitios como [Kaggle](https://www.kaggle.com/) son implementaciones donde:
+
+- Hay un conjunto de datos disponibles, con los que cualquiera puede construir modelos
+- Existen competidores que se inscriben y producen reglas de predicción
+- Hay un referee que evalúa las reglas de los concursantes usando datos a los que sólo el referee
+tiene acceso.
+- (En algunos casos) Al final del concurso, los competidores muestran su metodología.
+
+**Ejemplo**: el concurso de Netflix (2009) siguió este patrón. De este concurso se desarrolló 
+parcialmente el área ahora floreciente de sistemas de recomendación.
+
+
+## Tres ejemplos de ajustes
+
+¿De qué depende tener buen desempeño en la tarea de aprendizaje supervisado?
+Comenzamos mostrando algunas formas de construir predicciones en un ejemplo simple,
+y cómo los evaluaríamos. Nos interesa comenzar contestar las preguntas:
+
+- ¿Por qué son diferentes error de entrenamiento y error de prueba?
+- ¿Por qué unos métodos son mejores que otros para un problema dado?
+- ¿Por qué los errores de predicción pueden ser altos?
+- ¿Qué hacer cuando las predicciones del modelo son malas?
+
+
+
+#### Ejemplo {-}
+
+¿Cuál de los siguientes tres ajustes crees que desempeñe mejor? ¿Cuál crees
+que tiene el mejor error de entrenamiento? ¿Cuál crees que tiene el mejor 
+error de prueba?
+
+
+```{r}
+modelo_svm <- svm_poly() %>% 
+  set_engine("kernlab") %>% 
+  set_mode("regression")
+mod_2 <- modelo_svm %>% set_args(cost = 0.1, degree = 3) %>% 
+  fit(y ~ x, datos)
+mod_3 <- modelo_svm %>% set_args(cost = 100, degree = 8) %>% 
+  fit(y ~ x, datos)
+```
+
+```{r, fig.width=7, fig.asp=0.7}
+datos_1 <- calcular_grafica(mod_1, "modelo 1")
+datos_2 <- calcular_grafica(mod_2, "modelo 2")
+datos_3 <- calcular_grafica(mod_3, "modelo 3")
+datos_g <- bind_rows(datos_1, datos_2, datos_3)
+ggplot(datos, aes(x = x)) +
+  geom_line(data = datos_g, aes(y = .pred, colour = nombre, group = nombre), size = 1.5) +
+    geom_point(aes(y = y)) 
+```
+
+Evaluamos primero error de entrenamiento:
+
+```{r}
+calcular_error <- function(mod_1, datos_prueba){
+  error <- predict(mod_1, datos_prueba) %>% 
+    bind_cols(datos_prueba) %>% 
+    rmse(truth = y, estimate = .pred) 
+  error
+}
+
+error_tbl <- tibble(modelo = list(mod_1, mod_2, mod_3)) %>% 
+  mutate(error_entrena = map_dbl(modelo, 
+    ~calcular_error(.x, datos) %>% pull(.estimate)))
+error_tbl %>% mutate_if(is.numeric, round)
+```
+
+Y ahora agregamos el error de prueba
+
+```{r}
+error_tbl <- error_tbl %>% 
+  mutate(error_prueba = map_dbl(modelo, 
+    ~calcular_error(.x, datos_prueba) %>% pull(.estimate)))
+error_tbl %>% mutate_if(is.numeric, round)
+```
+
+Ahora explicamos lo que observamos en este ejemplo.
 
 **Observaciones**
 
-- El "mejor"" modelo en entrenamiento es uno que *sobreajusta* a los datos, pero es
-el peor con una muestra de prueba. La curva roja aprende de la componente
-de ruido del modelo - lo cual realmente no es aprendizaje.
+- El "mejor" modelo en entrenamiento es uno que *sobreajusta* a los datos, pero es
+el peor con una muestra de prueba. La curva 3 aprende de la componente
+de ruido del modelo - lo cual realmente no es aprendizaje. Tiene una **brecha**
+grande entre entrenamiento y prueba.
 
 - El modelo de la recta no es bueno en entrenamiento ni en prueba. Este modelo
 no tiene la capacidad para aprender de la señal en los datos.
 
 - El mejor modelo en la muestra de prueba es uno que está entre la recta y
-la curva roja en términos de flexibilidad. 
+la curva 3 en términos de flexibilidad. 
 
-- Nuestra intuición para escoger el modelo gris desde el principio se refleja
+- Nuestra intuición para escoger el modelo 2 desde el principio se refleja
 en que *generaliza* mejor que los otros, y eso a su vez se refleja en
 un error de prueba más bajo.
 
-- ¿De dónde
-provienen los errores en la predicción? ¿Podemos hacer el error igual a cero?
-Si establemos que el error es una función
-creciente de $Y-\hat{Y}$, vemos que
-$$ Y-\hat{Y} = f(X) + \epsilon - \hat{f}(X)= (f(X) - \hat{f}(X)) + \epsilon,$$
-donde vemos que hay dos componentes que pueden hacer grande a $Y-\hat{Y}$:
-    - La diferencia $f(X) - \hat{f}(X)$ está asociada a **error reducible**, pues
-depende de qué tan bien estimemos $f(X)$ con $\hat{f}(X)$
+## Aprendizaje y ajuste de curvas
+
+Una manera de entender por qué pasa eso es considerando la situación donde
+la relación entre $x$ y $y$ se puede expresar como
+
+$$y = f(x) + \epsilon$$
+donde $\epsilon$ es una término de error aleatorio 
+que tiene valor esperado $\textrm{E}(\epsilon | x)=0$ (su media no depende
+de los valores de las entradas).
+
+
+- $f$ expresa la relación sistemática que hay entre $y$ y $x$: para cada valor
+posible de $x$, la *contribución* de $x$ a $y$ es $f(x)$. Típicamente
+es una función complicada de $x$.
+- Pero $x$ **no determina** a $y$, agregamos una error 
+aleatorio $\epsilon$, con media cero (si la media
+no es cero podemos agregar una constante a $f$).
+- $\epsilon$ representa, por ejemplo, el efecto de variables que no hemos
+medido o  procesos aleatorios que determinan la respuesta.
+
+En este caso, si consideramos la diferencia entre la predicción y el valor
+verdadero para un caso particular, podemos escribir:
+
+$$ y-\hat{y} = f(x) + \epsilon - \hat{f}(x)= (f(x) - \hat{f}(x)) + \epsilon,$$
+donde vemos que hay dos componentes que pueden hacer grande a $y-\hat{y}$:
+    - La diferencia $f(x) - \hat{f}(x)$ está asociada a **error reducible**, pues
+depende de qué tan bien estimemos $f(X)$ con $\hat{f}(x)$
     - El error aleatorio $\epsilon$, asociado a  **error irreducible**.
 
-- Cualquiera de estas dos cantidades pueden hacer que nuestras predicciones no sean
-precisas. No podemos hacer mucho acerca del error irreducible (sin cambiar las variables
-que usamos, la definición del problema, etc.) En nuestro ejemplo anterior, el error reducible:
-    - Es grande para el modelo rojo, pues responde demasiado fuerte a ruido en los datos (tiene varianza alta).
-    - Es grande para el modelo de la recta, pues no tiene capacidad para acercarse a
-la verdadera curva (está sesgado).
+Queremos que nuestro modelo ajustado $\hat{f}$ esté cerca de $f$, 
+pues no podemos hacer nada acerca de $\epsilon$. Hay
+dos razones por las $f$ puede estar lejos de $\hat{f}$:
 
+- $\hat{f}(x)$ está consistemente lejos de $f(x)$ para algunas $x$ porque no puede
+  capturar patrones que están en los datos (**sesgo**)
+- $\hat{f}(x)$ varía mucho con la muestra de entrenamiento, de manera que es probable
+  que para nuestra muestra caiga lejos de $f(x)$ (**varianza**)
+
+
+Una manera de cuantificar esto es mediante la **descomposición varianza-sesgo**. Con algunos cálculos simples,
+podemos demostrar que el error de predicción (con error cuadrático) se descompone en (con $x$ fija):
+
+$$E((y-\hat{f}(x))^2) = \left[ E(\hat{f}(x)) - f(x) \right]^2 + Var(\hat{f}(x)) + Var(\epsilon)$$
+
+donde el valor esperado es sobre el conjunto de entrenamiento ${\mathcal L}$ y $\epsilon$ (es decir, promediando sobre muestras de entrenamiento posibles).
+
+- El primer término le llamamos *sesgo* del predictor (si está consistentemente lejos de $f(x)$)
+- El segundo término es la *varianza* del predictor (qué tan sensible es a la muestra de entrenamiento)
+- Al tercer término le llamamos *error irreducible*.
+
+Este resultado explica lo que observamos en nuestro ejemplo de simulación. En análisis
+predictivo, buscamos encontrar el mejor balance de estos dos tipos de errores (sesgo y varianza).
 
 
 ## Balance de complejidad y rigidez {#error}
@@ -793,33 +904,7 @@ usando una **muestra de prueba**. El nivel adecuado de complejidad se traduce
 en menos error de predicción.
 ```
 
-#### Discusión (error de entrenamiento y prueba) {-}
 
-En términos teóricos, podemos ver cuál es el problema de intentar evaluar el
-error de predicción utilizando la muestra de entrenamiento. 
-
-En primer lugar consideremos evaluar el error de predicción para
-un ejemplo $$(y_0- \hat{f}(x_0))^2$$
-donde $(x_0, y_0)$ es independiente de la muestra de entrenamiento. En este
-caso, la $\hat{f}$ está fija, y el valor esperado (error de predicción) nos
-da el error de predicción.
-
-Sin embargo, si $(x,y)$ es un caso de entrenamiento, el valor esperado
-de 
-$$(y- \hat{f}(x))^2$$
-requiere un cálculo más complicado, pues ¡ $\hat{f}$ también depende de $(x,y)$,
-pues se construye con la muestra de entrenamiento !
-Esta cantidad podría ser igual a cero para cualquier $(x,y)$, por ejemplo 
-(si nuestro algoritmo "interpola" como el en la curva roja del ejemplo anterior),
-y no necesariamente tiene qué ver con el error de predicción.
-
-- En general, el error de entrenamiento es una cantidad secundaria, que 
-utilizaremos más como medida de diagnóstico de nuestro proceso de ajuste. La
-cantidad que realmente queremos hacer chica es el error de predicción, que evaluamos
-con una muestra de prueba independiente de la muestra de entrenamiento.
-- Para modelos muy simples, el error de entrenamiento puedes ser similar al de prueba. Sin
-embargo, conforme aumentamos complejidad (necesario para capturar patrones reales
-en los datos), estos dos errores típicamente divergen.
 
 ## ¿Cómo estimar f? 
 
@@ -888,7 +973,6 @@ consecuencias.
 - ¿Cómo poner en **producción** modelos y mantenerlos? Un flujo apropiado de trabajo,
 y de entrenamiento continuo puede ser la diferencia entre entre un modelo exitoso o uno
 que se vuelve fuente de dificultades y confusión.
-
 
 
 ## Resumen
