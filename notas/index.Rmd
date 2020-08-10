@@ -30,9 +30,9 @@ description: "Notas y material para el curso de aprendizaje de máquina (ITAM, 2
 
 ### Evaluación {-}
 
-- Tareas semanales (25%)
+- Tareas semanales (20%)
 - Examen parcial (30% práctico, 20% teórico)
-- Un examen final (25% práctico)
+- Un examen final (30% práctico)
 
 ### Material {-}
 
