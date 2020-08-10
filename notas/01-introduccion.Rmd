@@ -309,7 +309,7 @@ Estas variables son relevantes, y vemos que explican una parte considerable
 de la variación de los ingresos de los hogares. Sin embargo,
 ¿cómo podemos mejorar nuestras predicciones para el estrato de marginación
 muy alta, donde hay relativamente pocos datos, o para aquellos hogares
-con alto número de focos? Parece ser necesario incluír
+con alto número de focos? Parece ser necesario incluir
 más variables.
 
 
