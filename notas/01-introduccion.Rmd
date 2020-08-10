@@ -377,7 +377,7 @@ interesa predecir una variable respuesta $Y$ numérica en términos de
 variables de entrada disponibles $x = (x_1,x_2,\ldots, x_p)$. Dadas
 las variables de entrada, observamos una salida:
 
-$$(x_1, x_2, \ldots, x_n) \to y$$
+$$(x_1, x_2, \ldots, x_p) \to y$$
 
 y queremos predecir, para cada juego de entradas dado, qué valor de
 salida vamos a observar. El proceso que produce la salida $y$ a partir
@@ -389,10 +389,10 @@ puede haber muchas otras variables no medidas (no incluidas en nuestras $x_i$'s)
 que influyen sobre $y$. 
 
 Nuestro primer propósito es construir una función $f$ tal que si observamos
-cualquier $(x_1, x_2, \ldots, x_n) \to y$, entonces nuestra predicción es
+cualquier $(x_1, x_2, \ldots, x_p) \to y$, entonces nuestra predicción es
 
-$$\hat{y} = f(x_1, x_2, \ldots, x_n)$$
-Y buscamos que en cada caso $f(x_1, x_2 \ldots, x_n) \approx y$,
+$$\hat{y} = f(x_1, x_2, \ldots, x_p)$$
+Y buscamos que en cada caso $f(x_1, x_2 \ldots, x_p) \approx y$,
 es decir, con una regla o algoritmo $f$ podemos **predecir** con buena precisión 
 el valor de $y$. Esta $f$, como explicamos antes, puede ser producida de muy distintas
 maneras (experiencia, reglas a mano, datos, etc.) En cualquier caso,
@@ -421,7 +421,7 @@ después de que construimos la función $f$:
 $${\mathcal T} = \{(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)})\},$$
 
 Compararíamos entonces las respuestas observadas $\mathbf{y^{(i)}}$ con las
-predicciones $f(\mathbf{y^{(i)}})$. ¿Las diferencias son muy grandes? ¿subestimamos o sobrestimamos mucho?, etc ). 
+predicciones $f(\mathbf{x^{(i)}})$. ¿Las diferencias son muy grandes? ¿subestimamos o sobrestimamos mucho?, etc ). 
 
 Más precisamente, comparamos 
 observados con las predicciones de $f$ con una _función de pérdida_. En este
@@ -434,6 +434,7 @@ que es valor absoluto de la diferencia entre el precio de venta observado
 y el nuestra predicción. Pero quizá nos interese por conveniencia más el error cuadrático:
 
 $$L \left (f(\mathbf{x}^{(i)}), \mathbf{y}^{(i)}\right ) =\left(\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})\right )^2$$
+
 A la función $L$ le llamamos la **función de pérdida**, y con ella evaluamos
 el tamaño de los errores de predicción.
 
@@ -442,13 +443,13 @@ pero que en general el comportamiento sea adecuado, y eso no querría decir nece
 que nuestra regla $f$ es un mal predictor en general. Una idea simple es resumir evaluando
 el error promedio sobre los datos de prueba. El **error de prueba** de $f$ es
 
-$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)}))$$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{i=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)}))$$
 Por ejemplo, si usamos la pérdida absoluta, 
 
-$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})|$$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{i=1}^m |\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)})|$$
 o la cuadrática:
 
-$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m (\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)}))^2$$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{i=1}^m (\mathbf{y}^{(i)} - f(\mathbf{x}^{(i)}))^2$$
 Aunque podríamos usar también error relativo u otra medida más 
 interpretable o apropiada para nuestro problema.  A esta última cantidad le llamamos 
 **error de prueba**. A los datos que usamos para calcularla 
@@ -522,7 +523,7 @@ donde el valor esperado es sobre la distribución conjunta de $(x, y) \sim \pi$.
 que esta es una cantidad teórica que tenemos que estimar. Si la muestra de prueba
 es suficientemente grande ( $m$ es grande ), entonces
 
-$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) \approx Err(f)$$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{i=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) \approx Err(f)$$
 **Observación**: nótese que para que este argumento funcione, la $f$ no puede
 depender de ninguna manera de los datos de prueba 
 $(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)}),$ pues entonces tendríamos que tomar
@@ -568,14 +569,14 @@ $$L(\mathbf{y}^{(j)} , \hat{f}(\mathbf{x}^{(j)}))$$
 
 y el error promedio sobre la muestra ${\mathcal T}$ es
 
-$$ \widehat{Err}(f) = \frac{1}{m} \sum_{j=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) $$
+$$ \widehat{Err}(f) = \frac{1}{m} \sum_{i=1}^m L(\mathbf{y}^{(i)} , f(\mathbf{x}^{(i)})) $$
 
 que es una estimación del error de predicción $Err$
 
 Adicionalmente, definimos otra cantidad de menor interés,
 el **error de entrenamiento**, como 
 
-$$\overline{err} = \frac{1}{N}\sum_{i=1}^N (y^{(i)} - \hat{f}(x^{(i)}))^2.$$
+$$\overline{err} = \frac{1}{N}\sum_{i=1}^N L(y^{(i)} , \hat{f}(x^{(i)})).$$
 
 ```{block2, type='comentario'}
 La **tarea fundamental del análisis supervisado** es:
