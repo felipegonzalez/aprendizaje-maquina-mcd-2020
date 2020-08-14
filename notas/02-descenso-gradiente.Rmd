@@ -1,0 +1,122 @@
+# Modelos lineales y descenso en gradiente
+
+
+```{r, include = FALSE}
+library(ggplot2)
+theme_set(theme_minimal(base_size = 14))
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+```
+
+
+
+Consideramos un problema de regresión con entradas $x=(x_1,x_2,\ldots, Xxp)$
+y respuesta $y$. Buscamos una familia de funciones $\mathcal F$ apropiada, de forma
+que dados unos datos de entrenamiento $\mathcal L$ escojamos una función 
+$\hat{f}\in \mathcal F$ para hacer predicciones. Nos gustaría que el 
+error predictivo $Err(\hat{f})$ sea bajo.
+
+
+## Modelos lineales
+
+
+Una de las maneras más simples que podemos intentar
+para predecir $y$ en función de las $x_j$´s es mediante una suma ponderada
+de los valores de las $x_j's$, usando una función de la forma
+
+$$f_\beta (x) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \cdots + \beta_p x_p,$$
+En este caso, escoger una función particular de esta familia, dada una muestra de entrenamiento ${\mathcal L}$, consiste en encontrar
+encontrar valores apropiados de las $\beta$'s, para construir un predictor:
+
+$$\hat{f}(x) = \hat{\beta}_0 + \hat{\beta}_1 x_1 + \hat{\beta}_2 x_2 \cdots + \hat{\beta} x_p$$
+y usaremos esta función $\hat{f}$ para hacer predicciones $\hat{y} =\hat{f}(x)$.
+
+
+
+#### Ejemplos {-}
+
+Queremos predecir las ventas futuras anuales $y$ de una tienda que se va a construir
+en un lugar dado. Las variables que describen el lugar son
+$x_1 = trafico\_peatones$, $x_2=trafico\_coches$. En una aproximación simple,
+podemos suponer que la tienda va a capturar una fracción de esos tráficos que
+se van a convertir en ventas. Quisieramos predecir con una función de la forma
+$$f_\beta (peatones, coches) = \beta_0 + \beta_1\, peatones + \beta_2\, coches.$$
+Por ejemplo, después de un análisis estimamos que 
+
+- $\hat{\beta}_0 = 1000000$ (ventas base, si observamos tráficos igual a 0: es lo que va a atraer la tienda)
+- $\hat{\beta}_1 = (200)*0.02 = 4$ (capturamos 2\% del tráfico peatonal, y cada capturado gasta 200 pesos)
+- $\hat{\beta}_2 = (300)*0.01 =3$ (capturamos 1\% del tráfico de autos, y cada capturado gasta 300 pesos)
+Entonces haríamos predicciones con
+$$\hat{f}(peatones, coches) = 1000000 +  4\,peatones + 3\, coches.$$
+El modelo lineal es más flexible de lo que parece en una primera aproximación, porque
+tenemos libertad para construir las variables de entrada a partir de nuestros datos.
+Por ejemplo, si tenemos una tercera variable 
+$estacionamiento$ que vale 1 si hay un estacionamiento cerca o 0 si no lo hay, podríamos
+definir las variables
+- $x_1= peatones$
+- $x_2 = coches$
+- $x_3 = estacionamiento$
+- $x_4 = coches*estacionamiento$
+
+Donde la idea de agregar $x_4$ es que si hay estacionamiento entonces vamos
+a capturar una fracción adicional del trafico de coches, y la idea de $x_3$ es que 
+la tienda atraerá más nuevas visitas si hay un estacionamiento cerca. Buscamos 
+ahora modelos de la forma
+$$f_\beta(x_1,x_2,x_3,x_4) = \beta_0 + \beta_1x_1 + \beta_2 x_2 + \beta_3 x_3 +\beta_4 x_4$$
+y podríamos obtener después de nuestra análisis las estimaciones
+- $\hat{\beta}_0 = 800000$ (ventas base)
+- $\hat{\beta}_1 = 4$
+- $\hat{\beta}_2 = (300)*0.005 = 1.5$
+- $\hat{\beta}_3 = 400000$ (ingreso adicional si hay estacionamiento por nuevo tráfico)
+- $\hat{\beta}_4 = (300)*0.02 = 6$ (ingreso adicional por tráfico de coches si hay estacionamiento)
+ 
+ y entonces haríamos predicciones con el modelo
+$$\hat{f} (x_1,x_2,x_3,x_4) = 800000 + 4\, x_1 + 1.5 \,x_2 + 400000\, x_3 +6\, x_4$$
+
+## Aprendizaje de coeficientes (ajuste)
+
+En el ejemplo anterior, los coeficientes fueron calculados (o estimados) usando
+experiencia, reglas, argumentos teóricos, o quizá otras fuentes de datos (como estudios
+o encuestas, conteos, etc.) 
+
+Ahora quisiéramos construir un algoritmo para
+aprender estos coeficientes del modelo
+$$f_\beta (X_1) = \beta_0 + \beta_1 X_1 + \cdots \beta_p X_p$$
+a partir de una muestra de entrenamiento de datos históricos de tiendas que hemos
+abierto antes:
+$${\mathcal L}=\{ (x^{(1)},y^{(1)}),(x^{(2)},y^{(2)}), \ldots, (x^{(N)}, y^{(N)}) \}$$
+El criterio de ajuste (algoritmo de aprendizaje) más usual para regresión 
+lineal es el de **mínimos cuadrados**. 
+
+Construimos las predicciones (ajustados) para la muestra de entrenamiento:
+$$\hat{y}^{(i)} =  f_\beta (x^{(i)}) = \beta_0 + \beta_1 x_1^{(i)}+ \cdots + \beta_p x_p^{(i)}$$
+
+Y consideramos las diferencias de los ajustados con los valores observados:
+
+$$e^{(i)} = y^{(i)} - f_\beta (x^{(i)})$$
+
+La idea entonces es minimizar la suma de los residuales al cuadrado, para
+intentar que la función ajustada pase lo más cercana a los puntos de entrenamiento 
+que sea posible. La función de pérdida que utilizamos más frecuentemente
+es la pérdida cuadrática, dada por:
+
+$$L(\beta) = ECM(\beta) = \frac{1}{N}\sum_{i=1}^N (y^{(i)} - f_\beta(x^{(i)}))^2$$
+(ECM es el *error cuadrático medio*).
+
+```{block2, type = 'comentario'}
+**Mínimos cuadrados para regresión lineal**
+Buscamos encontrar:
+$$\hat{\beta} = \mathrm{arg\,min}_{\beta} L(\beta) = \mathrm{arg\,min}_{\beta}\frac{1}{N}\sum_{i=1}^N (y^{(i)} - f_\beta(x^{(i)}))^2$$
+    donde
+ $$f_\beta (x^{(i)}) = \beta_0 + \beta_1 x_1^{(i)}+ \cdots + \beta_p x_p^{(i)}$$
+```
+
+**Observación**:
+Como discutimos al final de las sección anterior, minimizar directamente el error
+ de entrenamiento para encontrar los coeficientes puede resultar en en un modelo
+ sobreajustado/con varianza alta/ruidoso. Hay
+ tres grandes estrategias para mitigar este problema: restringir o estructurar la familia
+ de funciones, penalizar la función objetivo o perturbar la muestra de entrenamiento.
+ El método mas común es cambiar la función objetivo, que discutiremos más adelante
+ en la sección de regularización.
+
+
