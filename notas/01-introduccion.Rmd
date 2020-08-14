@@ -915,7 +915,8 @@ lugar, el método general más usual para encontrar $\hat{f}$ es hacer lo siguie
 - Consideramos una familia de funciones $h$ candidatas para aproximar $f$
 - Calculamos el error de entrenamiento de cada posible $h$, y encontramos
 la $h$ que minimiza el error de entrenamiento (la que más se ajusta a los datos
-de entrenamiento). Tomamos $\hat{f} = h$.
+de entrenamiento). Tomamos $\hat{f} = h$. Si usamos la pérdida cuadrática,
+
 $$\hat{f} = \min_h \frac{1}{N}\sum_{i=1}^N (y^{(i)} - h(x^{(i)}))^2.$$
 - Evaluar el error de predicción del modelo que seleccionamos (queremos que sea bajo):
 
