@@ -823,7 +823,7 @@ dos razones por las $f$ puede estar lejos de $\hat{f}$:
 Una manera de cuantificar esto es mediante la **descomposición varianza-sesgo**. Con algunos cálculos simples,
 podemos demostrar que el error de predicción (con error cuadrático) se descompone en (con $x$ fija):
 
-$$E((y-\hat{f}(x))^2) = \left[ E(\hat{f}(x)) - f(x) \right]^2 + Var(\hat{f}(x)) + Var(\epsilon)$$
+$$E \left [(y-\hat{f}(x))^2 \right ] = \left[ E(\hat{f}(x)) - f(x) \right]^2 + Var(\hat{f}(x)) + Var(\epsilon)$$
 
 donde el valor esperado es sobre el conjunto de entrenamiento ${\mathcal L}$ y $\epsilon$ (es decir, promediando sobre muestras de entrenamiento posibles).
 
@@ -919,7 +919,7 @@ de entrenamiento). Tomamos $\hat{f} = h$.
 $$\hat{f} = \min_h \frac{1}{N}\sum_{i=1}^N (y^{(i)} - h(x^{(i)}))^2.$$
 - Evaluar el error de predicción del modelo que seleccionamos (queremos que sea bajo):
 
-$$\hat{Err} =   \frac{1}{m}\sum_{j=1}^m (y_0^{(j)} - \hat{f}(x_0^{(j)}))^2$$
+$$\hat{Err} =   \frac{1}{m}\sum_{j=1}^m (\mathbf{y}^{(j)} - \hat{f}(\mathbf{x}^{(j)}))^2$$
 
 De modo que el proceso es un problema de minimización. Lo que hace
 interesante nuestro caso es que realmente **no queremos minimizar el error de entrenamiento**. Queremos **minimizar el error de prueba**. O sea que minimizamos una cantidad
