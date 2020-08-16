@@ -87,7 +87,7 @@ datos_2 <- calcular_grafica(mod_2, "modelo 2")
 datos_3 <- calcular_grafica(mod_3, "modelo 3")
 # escoge cuáles graficar
 datos_g <- bind_rows(datos_1, datos_2, datos_3, datos_f)
-ggplot(datos, aes(x = x)) +
+ggplot(datos_entrena, aes(x = x)) +
   geom_line(data = datos_g, aes(y = .pred, colour = nombre, group = nombre), size = 1.5) +
     geom_point(aes(y = y)) +
   ylim(c(-500, 4500))
