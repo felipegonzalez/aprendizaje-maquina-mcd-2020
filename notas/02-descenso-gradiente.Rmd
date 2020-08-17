@@ -1014,6 +1014,6 @@ La cubertura se ve apropiada. Resumimos con:
 casas_int %>% 
     mutate(cubre = precio_miles > .pred_lower & precio_miles < .pred_upper) %>% 
     summarise(cobertura = mean(cubre), ee = sqrt(mean(cubre) * mean(1 - cubre) / n())) %>% 
-    mutate_if(is_numeric, round, 3)
+    mutate(across(where(is_numeric), round, 3))
 ```
 
