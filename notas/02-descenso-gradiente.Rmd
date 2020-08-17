@@ -761,7 +761,7 @@ con los coeficientes del modelo no normalizado.
 Supongamos que el modelo en las variables originales  es
 $${f}_\beta (X) = \beta_0 + \beta_1 X_1 + \beta_2 X_2 + \cdots + \beta_p X_p,$$
 Consideramos el modelo con variables estandarizadas
-$${g}_\beta (X) = \beta_0^s + \beta_1^s Z_1 + \beta_2^s Z_2 + \cdots + \beta_p^s Z_p,$$
+$${g}_{\beta^s} (X) = \beta_0^s + \beta_1^s Z_1 + \beta_2^s Z_2 + \cdots + \beta_p^s Z_p,$$
 
 Sustituyendo $Z_j = (X_j - \mu_j)/s_j,$ 
 
@@ -882,10 +882,6 @@ cuidados se estudian en un curso de regresión desde el punto de vista
 estadístico, por ejemplo:
 
 
-- Variación muestral. Es necesario en primer lugar 
-considerar la variación en nuestras estimaciones
-de los coeficientes para poder concluir acerca de su relación con el fenómeno (tratable desde punto de vista estadístico, pero hay que checar supuestos). 
-
 - Efectos no lineales (especificación incorrecta del modelo): si la 
 estructura del problema es altamente no lineal,
 los coeficientes de un modelo lineal no tienen una interpretación clara en relación 
@@ -897,9 +893,14 @@ de entrada ocurren
 de manera independiente de las otras variables de entrada. Eso hace difícil de interpretar
 los coeficientes.
 
+- Variación muestral. Es necesario en primer lugar 
+considerar la variación en nuestras estimaciones
+de los coeficientes para poder concluir acerca de su relación con el fenómeno (tratable desde punto de vista estadístico, pero hay que checar supuestos). 
+
+
 Otros cuidados adicionales, aún más sutiles e importantes, se requieren si queremos hacer 
 afirmaciones causales: ¿qué pasaría si diseñáramos una intervención para cambiar una característica de las 
-unidades¿ ¿qué nos dice modelos acerca del cambio en la variable respuesta?
+unidades? ¿qué nos dice modelos acerca del cambio en la variable respuesta?
 
 - Variables omitidas: si nos faltan algunas variables cruciales en el fenómeno que nos
 interesa, o el modelo sufre de otro tipo de especificación incorrecta ,
@@ -991,18 +992,28 @@ razonables es necesario hacer ejercicios de modelación más delicados. En el si
 ejemplo producimos intervalos de cobertura nominal del 95%. Con la muestra de prueba
 checamos que estos intervalos estén bien calibrados:
 
-```{r, message = FALSE}
-modelo_casas <- lm(precio_m2_miles ~ calidad + tiene_piso_2, data = train_tbl)
-preds_val <- predict(modelo_casas, newdata = test_tbl, interval = "prediction",
-                     level = 0.95)
-preds_val_precio <- preds_val * test_tbl$habitable_m2
-valida_g <- bind_cols(preds_val_precio %>% as_tibble, test_tbl %>% select(precio_miles))
-head(valida_g)
-ggplot(valida_g, aes(x = fit, ymin = lwr, ymax = upr)) +
-    geom_linerange(colour = "gray") +
-    geom_point(aes(y = precio_miles, x = fit), colour = "red")
-valida_g %>% mutate(cubre = precio_miles > lwr & precio_miles < upr) %>% 
-    summarise(cobertura = mean(cubre), ee = sqrt(mean(cubre) * mean(1 - cubre) / n()))
+```{r}
+casas_int <- predict(ajuste, test_tbl, type = "pred_int", level = 0.95) %>% 
+  bind_cols(predict(ajuste, test_tbl)) %>% 
+  bind_cols(test_tbl) %>% 
+  mutate(.pred_lower = .pred_lower * habitable_m2, 
+         .pred = .pred * habitable_m2,
+         .pred_upper = .pred_upper * habitable_m2,)
+head(casas_int)
 ```
 
-Y como vemos, la calibración es aceptable.
+```{r}
+ggplot(casas_int, aes(x = .pred, ymin = .pred_lower, ymax = .pred_upper)) +
+    geom_linerange(colour = "gray") +
+    geom_point(aes(y = precio_miles), colour = "red")
+```
+
+La cubertura se ve apropiada. Resumimos con:
+
+```{r}
+casas_int %>% 
+    mutate(cubre = precio_miles > .pred_lower & precio_miles < .pred_upper) %>% 
+    summarise(cobertura = mean(cubre), ee = sqrt(mean(cubre) * mean(1 - cubre) / n())) %>% 
+    mutate_if(is_numeric, round, 3)
+```
+
