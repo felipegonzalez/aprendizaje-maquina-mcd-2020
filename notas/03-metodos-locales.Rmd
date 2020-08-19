@@ -1,0 +1,280 @@
+# Métodos locales y regresión lineal
+
+Regresión lineal es un método muy simple, 
+y parecería que debería haber métodos más avanzados que lo superen fácilmente en la predicción.
+
+Para empezar, es poco creíble que el modelo
+$$f(x) = b_0 + b_1x_1 + \cdots b_p x_p$$
+se cumple exactamente para el fenómeno que estamos tratando. Pero regresión lineal muchas veces supera a métodos que intentan
+construir predictores más complejos. 
+Una de las primeras razones es que podemos ver la aproximación lineal como una aproximación de primer orden a la verdadera $f(X)$, y muchas veces eso es suficiente para producir predicciones razonables.
+
+Adicionalmente, otras veces sólo tenemos suficientes datos para hacer una aproximación de primer orden, aún cuando la verdadera
+$f(x)$ no sea lineal, y resulta que esta aproximación da buenos resultados. Esto es particularmente cierto en problemas de dimensión alta, como veremos a continuación.
+
+
+
+## k vecinos más cercanos
+
+Un método popular, con buen desempeño en varios ejemplos, 
+es el de k-vecinos más cercanos, 
+que consiste en hacer aproximaciones locales directas de $f(x)$.
+Sea ${\mathcal L}$  un conjunto de entrenamiento. Para $k$ entera fija, y 
+$x_0$ una entrada donde queremos predecir, definimos a $N_k(x_0)$ como el conjunto de los $k$ elementos
+de ${\mathcal L}$ que tienen $x^{(i)}$ más cercana a $x_0$. Hacemos la predicción
+$$\hat{f}(x_0) = \frac{1}{k}\sum_{x^{(i)} \in N_k(x_0)} y^{(i)}$$
+
+Es decir, promediamos las $k$ $y$'s con $x$'s más cercanas a donde queremos predecir.
+
+
+#### Ejemplo {-}
+
+```{r, message = FALSE}
+library(tidyverse)
+auto <- read_csv("../datos/auto.csv")
+datos <- auto[, c('name', 'weight','year', 'mpg')]
+datos <- datos %>% mutate(
+  peso_kg = weight * 0.45359237,
+  rendimiento_kpl = mpg * (1.609344 / 3.78541178))
+nrow(datos)
+```
+
+Vamos a separa en muestra de entrenamiento y de prueba estos datos. Podemos
+hacerlo como sigue (2/3 para entrenamiento aproximadamente en este caso, así
+obtenemos alrededor de 100 casos para prueba):
+
+```{r}
+set.seed(213)
+datos$muestra_unif <- runif(nrow(datos), 0, 1)
+datos_entrena <- filter(datos, muestra_unif > 1/3)
+datos_prueba <- filter(datos, muestra_unif <= 1/3)
+nrow(datos_entrena)
+nrow(datos_prueba)
+```
+
+```{r}
+ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
+  geom_point()
+```
+
+Consideremos un modelo de $k=15$ vecinos más cercanos. La función de predicción
+ajustada es entonces:
+
+```{r}
+library(kknn)
+# nótese que no normalizamos entradas - esto también es importante
+# hacer cuando hacemos vecinos más cercanos, pues en otro caso
+# las variables con escalas más grandes dominan el cálculo
+mod_15vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
+                  test = tibble(peso_kg = seq(700, 2200, by = 10)), 
+                  k=15)
+dat_graf <- tibble(peso_kg = seq(700, 2200, by = 10), 
+                       rendimiento_kpl = predict(mod_15vmc))
+ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
+  geom_point(alpha=0.6) + 
+  geom_line(data=dat_graf, col='red', size = 1.2)
+```
+
+Y para $k=5$ vecinos más cercanos:
+
+```{r}
+mod_5vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
+                  test = tibble(peso_kg=seq(700,2200, by = 10)), 
+                  k = 5)
+dat_graf <- tibble(peso_kg = seq(700,2200, by = 10), 
+                       rendimiento_kpl = predict(mod_5vmc))
+ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
+  geom_point(alpha=0.6) + 
+  geom_line(data=dat_graf, col='red', size = 1.2)
+```
+
+En nuestro caso, los errores de prueba son
+
+```{r}
+mod_3vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
+                  test = datos_prueba, 
+                  k = 3)
+mod_15vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
+                  test = datos_prueba, 
+                  k = 15)
+(mean((datos_prueba$rendimiento_kpl-predict(mod_3vmc))^2))
+(mean((datos_prueba$rendimiento_kpl-predict(mod_15vmc))^2))
+```
+
+Pregunta: ¿Cómo escogerías una $k$ adecuada para este problema? Recuerda que adecuada significa que se reduzca a mínimo posible
+el error de predicción. Como ejercicio, compara los modelos con
+$k = 2, 25, 200$ utilizando una muestra de prueba. ¿Cuál se desempeña mejor? 
+Da las razones de el mejor o peor desempeño: recuerda que el desempeño en predicción puede sufrir porque la función estimada no es suficiente flexible para capturar patrones importantes, pero también porque parte del ruido se incorpora en la predicción.
+
+Por los ejemplos anteriores, vemos que k-vecinos más cercanos puede considerarse como un aproximador universal, que puede adaptarse a cualquier patrón importante que haya en los datos. Entonces, ¿cuál es la razón de utilizar otros métodos como regresión? ¿Por qué el desempeño de regresión sería superior?
+
+
+## La maldición de la dimensionalidad {-}
+El método de k-vecinos más cercanos funciona mejor cuando hay muchas $x$ cercanas a $x0$, de forma que el promedio sea estable (muchas $x$), y extrapolemos poco ($x$ cercanas).
+Cuando $k$ es muy chica, nuestras estimaciones son ruidosas, y cuando $k$ es grande y los vecinos están lejos, entonces estamos sesgando la estimación local con datos lejanos a nuestra región de interés.
+
+El problema es que en dimensión alta, casi cualquier conjunto de
+entrenamiento (independientemente del tamaño) sufre fuertemente por uno o ambas dificultades del problema.
+
+
+
+#### Ejemplo {-}
+ Consideremos que la salida Y es determinística $Y = e^{-8\sum_{j=1}^p x_j^2}$.
+Vamos a usar 1-vecino más cercano para hacer predicciones, con 
+una muestra de entrenamiento de 1000 casos.
+Generamos $x^{i}‘s uniformes en $[ 1,1]$, para $p = 2$, y calculamos la respuesta 
+$Y$ para cada caso:
+
+```{r}
+fun_exp <- function(x) exp(-8 * sum(x ^ 2))
+x <- map(1:1000, ~ runif(2, -1, 1))
+dat <- tibble(x = x) %>% 
+        mutate(y = map_dbl(x, fun_exp))
+ggplot(dat %>% mutate(x_1 = map_dbl(x, 1), x_2 = map_dbl(x, 2)), 
+       aes(x = x_1, y = x_2, colour = y)) + geom_point()
+```
+
+La mejor predicción en $x_0 = (0,0)$ es $f((0,0)) = 1$. Eñ vecino más
+cercano al origen es
+```{r}
+dat <- dat %>% mutate(dist_origen = map_dbl(x, ~ sqrt(sum(.x^2)))) %>% 
+  arrange(dist_origen)
+mas_cercano <- dat[1, ]
+mas_cercano; mas_cercano$x[[1]]
+```
+Nuestra predicción es entonces $\hat{f}(0)=$ `r mas_cercano$y`, que
+es bastante cercano al valor verdadero (1).
+
+Ahora intentamos hacer lo mismo para dimensión $p=8$.
+
+```{r}
+x <- map(1:1000, ~ runif(8, -1, 1))
+dat <- tibble(x = x) %>% 
+       mutate(y = map_dbl(x, fun_exp))
+dat <- dat %>% mutate(dist_origen = map_dbl(x, ~ sqrt(sum(.x^2)))) %>% 
+  arrange(dist_origen)
+mas_cercano <- dat[1, ]
+mas_cercano; mas_cercano$x[[1]]
+```
+
+Y el resultado es un desastre. Nuestra predicción es
+```{r}
+mas_cercano$y
+```
+Necesitariamos una muestra de alrededor de  un millón de casos
+para obtener resultados no tan malos (pruébalo).
+
+¿Qué es lo que está pasando? La razón es que en dimensiones altas, 
+los puntos de la muestra de entrenamiento están muy lejos 
+unos de otros, y están cerca de la frontera, 
+incluso para tamaños de muestra relativamente grandes como n = 1000.
+Cuando la dimensión crece, la situación empeora exponencialmente.
+
+```{block, type = 'comentario'}
+En dimensiones altas, todos los conjuntos de entrenamiento factibles
+se distribuyen de manera rala en el espacio de entradas.
+```
+
+## Regresión lineal en dimensión alta
+
+Ahora intentamos algo similar con una función que es razonable aproximar
+con una función lineal:
+
+```{r}
+fun_cuad <- function(x)  0.5 * (1 + x[1])^2
+```
+
+Y queremos predecir para $x=(0,0,\ldots,0)$, cuyo valor exacto es
+
+```{r}
+fun_cuad(0)
+```
+
+Los datos se generan de la siguiente forma:
+
+```{r}
+simular_datos <- function(p = 40){
+    x <- map(1:1000,  ~ runif(p, -1, 1))
+    dat <- tibble(x = x) %>% mutate(y = map_dbl(x, fun_cuad)) 
+    dat
+}
+```
+
+Por ejemplo para dimensión baja $p=1$ (nótese que una aproximación
+lineal es razonable):
+
+```{r}
+ejemplo <- simular_datos(p = 1) %>% mutate(x = unlist(x))
+ggplot(ejemplo, aes(x = x, y = y)) + geom_point() +
+    geom_smooth(method = "lm")
+```
+
+
+Ahora repetimos el proceso en dimensión $p=40$: simulamos las entradas, y aplicamos un vecino más cercano
+
+```{r}
+vmc_1 <- function(dat){
+    dat <- dat %>% 
+        mutate(dist_origen = map_dbl(x, ~ sqrt(sum(.x^2)))) %>% 
+        arrange(dist_origen)
+        mas_cercano <- dat[1, ]
+        mas_cercano$y
+}
+set.seed(834)
+dat <- simular_datos(p = 40)
+vmc_1(dat)
+```
+
+Este no es un resultado muy bueno. Sin embargo, regresión se
+desempeña considerablemente mejor:
+
+```{r}
+regresion_pred <- function(dat){
+    p <- length(dat$x[[1]])
+    dat_reg <- cbind(
+        y = dat$y, 
+        x = matrix(unlist(dat$x), ncol = p, byrow=T)) %>% 
+        as.data.frame()
+    mod_lineal <- lm(y ~ ., dat = dat_reg)
+    origen <- data.frame(matrix(rep(0, p), 1, p))
+    names(origen) <- names(dat_reg)[2:(p+1)]
+    predict(mod_lineal, newdata = origen)
+}
+regresion_pred(dat)
+```
+
+Donde podemos ver que típicamente la predicción de regresión
+es mucho mejor que la de 1 vecino más cercano. Esto es porque el modelo **explota la estructura aproximadamente lineal del problema** (¿cuál estructura lineal? haz algunas gráficas). Nota: corre este ejemplo varias veces con semilla diferente.
+
+*Solución*: vamos a hacer varias simulaciones, para ver qué modelo
+se desempeña mejor.
+
+```{r}
+sims <- map(1:200, function(i){
+    dat <- simular_datos(p = 40)
+    vmc_y <- vmc_1(dat)
+    reg_y <- regresion_pred(dat)
+    tibble(rep = i, 
+           error = c(abs(vmc_y - 0.5), abs(reg_y - 0.5)), 
+            tipo = c("vmc", "regresion"))
+}) %>% bind_rows
+ggplot(sims, aes(x = tipo, y = error)) + geom_boxplot() 
+```
+
+Así que típicamente el error de vecinos más cercanos es más alto
+que el de regresión. El error esperado es para vmc es más de doble
+que el de regresión:
+
+```{r}
+sims %>% group_by(tipo) %>% 
+    summarise(media_error = mean(error))
+```
+
+
+Lo que sucede más específicamente es que en regresión lineal
+utilizamos **todos** los datos para hacer nuestra estimación en cada
+predicción. Si la estructura del problema es aproximadamente lineal, 
+entonces regresión lineal explota la estructura para hacer *pooling*
+de toda la información para construir predicción con sesgo y varianza bajas.
+En contraste, vecinos más cercanos sufre de varianza alta.
+
