@@ -32,7 +32,7 @@ Es decir, promediamos las $k$ $y$'s con $x$'s más cercanas a donde queremos pre
 ```{r, message = FALSE}
 library(tidyverse)
 auto <- read_csv("../datos/auto.csv")
-datos <- auto[, c('name', 'weight','year', 'mpg')]
+datos <- auto[, c('name', 'weight','year', 'mpg', 'displacement')]
 datos <- datos %>% mutate(
   peso_kg = weight * 0.45359237,
   rendimiento_kpl = mpg * (1.609344 / 3.78541178))
@@ -45,8 +45,8 @@ obtenemos alrededor de 100 casos para prueba):
 
 ```{r, message = FALSE}
 library(tidymodels)
-set.seed(1213)
-datos_split <- initial_split(datos, prop = 0.67)
+set.seed(123)
+datos_split <- initial_split(datos, prop = 0.7)
 datos_entrena <- training(datos_split)
 datos_prueba <- testing(datos_split)
 nrow(datos_entrena)
@@ -54,7 +54,7 @@ nrow(datos_prueba)
 ```
 
 ```{r}
-ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
+ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl, colour=year)) +
   geom_point()
 ```
 
@@ -65,55 +65,66 @@ ajustada es entonces:
 # nótese que no normalizamos entradas - esto también es importante
 # hacer cuando hacemos vecinos más cercanos, pues en otro caso
 # las variables con escalas más grandes dominan el cálculo
-vmc_15 <- nearest_neighbor(neighbors = 15) %>% 
+vmc_1 <- nearest_neighbor(neighbors = 15, weight_func = "rectangular") %>% 
   set_engine("kknn") %>% 
   set_mode("regression")
-rend_vmc <- fit(vmc_15, rendimiento_kpl ~ peso_kg, datos_entrena)
+receta_vmc <- recipe(rendimiento_kpl ~ peso_kg + year, datos_entrena) %>% 
+  step_normalize(all_predictors()) %>% 
+  prep()
+flujo <- workflow() %>% 
+  add_recipe(receta_vmc) 
+ajuste_1 <- flujo %>% add_model(vmc_1) %>% fit(datos_entrena)
 ```
 
 ```{r}
-dat_graf <- tibble(peso_kg = seq(700, 2200, by = 10))
+dat_graf <- tibble(peso_kg = seq(700, 2200, by = 10)) %>% 
+  crossing(tibble(year= c(70, 75, 80)))
 dat_graf <- dat_graf %>% 
-  mutate(pred_15 = predict(rend_vmc, dat_graf) %>% pull(.pred))
-ggplot(datos_entrena, aes(x = peso_kg)) +
+  mutate(pred_1 = predict(ajuste_1, dat_graf) %>% pull(.pred))
+ggplot(datos_entrena, aes(x = peso_kg, group = year, colour = year)) +
   geom_point(aes(y = rendimiento_kpl), alpha = 0.6) + 
-  geom_line(data = dat_graf, aes(y = pred_15), col = 'red', size = 1.2)
+  geom_line(data = dat_graf, aes(y = pred_1),  size = 1.2)
 ```
 
 
 
-Y para $k=5$ vecinos más cercanos:
+Y para $k=1$ vecinos más cercanos:
 
 ```{r}
-vmc_3 <- nearest_neighbor(neighbors = 3) %>% 
+vmc_2 <- nearest_neighbor(neighbors = 1, weight_func = "rectangular") %>% 
   set_engine("kknn") %>% 
   set_mode("regression")
-rend_vmc_3 <- fit(vmc_3, rendimiento_kpl ~ peso_kg, datos_entrena)
+ajuste_2 <- flujo %>% add_model(vmc_2) %>% fit(datos_entrena)
 dat_graf <- dat_graf %>% 
-  mutate(pred_5 = predict(rend_vmc_3, dat_graf) %>% pull(.pred))
-ggplot(datos_entrena, aes(x = peso_kg)) +
+  mutate(pred_2 = predict(ajuste_2, dat_graf) %>% pull(.pred))
+ggplot(datos_entrena, aes(x = peso_kg, group = year, colour = year)) +
   geom_point(aes(y = rendimiento_kpl), alpha = 0.6) + 
-  geom_line(data = dat_graf, aes(y = pred_5), col = 'red', size = 1.2)
+  geom_line(data = dat_graf, aes(y = pred_2),  size = 1.2)
 ```
 
 En nuestro caso, los errores de prueba son
 
 ```{r}
-eval_1 <- predict(rend_vmc, datos_prueba) %>% 
+eval_1 <- predict(ajuste_1, datos_prueba) %>% 
   bind_cols(datos_prueba) %>% 
   rmse(rendimiento_kpl, .pred) %>% 
     mutate(n_vecinos = 15) 
-eval_2 <- predict(rend_vmc_3, datos_prueba) %>% 
+eval_2 <- predict(ajuste_2, datos_prueba) %>% 
   bind_cols(datos_prueba) %>% 
   rmse(rendimiento_kpl, .pred) %>% 
-    mutate(n_vecinos = 3) 
+    mutate(n_vecinos = 1) 
 bind_rows(eval_1, eval_2)
 ```
 
-Pregunta: ¿Cómo escogerías una $k$ adecuada para este problema? Recuerda que adecuada significa que se reduzca a mínimo posible
+**Observaciones**:
+- En ambos casos tenemos error de estimación del error de predicción. Cuando la muestra
+de prueba es relativamente chica, es importante estimar esta cantidad.
+- ¿Cómo escogerías una $k$ adecuada para este problema? Recuerda que adecuada significa que se reduzca a mínimo posible
 el error de predicción. Como ejercicio, compara los modelos con
-$k = 2, 25, 200$ utilizando una muestra de prueba. ¿Cuál se desempeña mejor? 
-Da las razones de el mejor o peor desempeño: recuerda que el desempeño en predicción puede sufrir porque la función estimada no es suficiente flexible para capturar patrones importantes, pero también porque parte del ruido se incorpora en la predicción.
+$k = 2, 25, 100$ utilizando una muestra de prueba. ¿Cuál se desempeña mejor? 
+Da las razones de el mejor o peor desempeño: recuerda que el desempeño en predicción puede sufrir porque la función estimada no es suficiente flexible para capturar patrones importantes, pero también porque parte del ruido se incorpora en la predicción. **Nota**: no es muy conveniente utilizar el conjunto
+de prueba para seleccionar parámetros de nuestros métodos. Veremos más adelantes cómo hacer
+este paso usando una muestra o método de validación adicionales.
 
 Por los ejemplos anteriores, vemos que k-vecinos más cercanos puede considerarse como un aproximador universal, que puede adaptarse a cualquier patrón importante que haya en los datos. Entonces, ¿cuál es la razón de utilizar otros métodos como regresión? ¿Por qué el desempeño de regresión sería superior?
 
