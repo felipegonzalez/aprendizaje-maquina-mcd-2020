@@ -925,8 +925,9 @@ persona en compra de TVs Samsung. Sin embargo, ningún diagnóstico del
 modelo nos puede decir de esta especificación incorrecta.
 
 En general, la recomendación es que las interpretaciones causales deben considerarse
-como preliminares (o *sugerencias*), y se requiere más análisis y consideraciones
-antes de poder tener interpretaciones causales sólidas. 
+como preliminares bajo ciertos supuestos, y se requiere más análisis y consideraciones
+antes de poder tener interpretaciones causales sólidas (ver @KingCausal y @GelmanHill,
+por ejemplo). 
 
 ## Predicción e incertidumbre
 
@@ -1013,7 +1014,8 @@ La cubertura se ve apropiada. Resumimos con:
 ```{r}
 casas_int %>% 
     mutate(cubre = precio_miles > .pred_lower & precio_miles < .pred_upper) %>% 
-    summarise(cobertura = mean(cubre), ee = sqrt(mean(cubre) * mean(1 - cubre) / n())) %>% 
+    summarise(cobertura = mean(cubre), 
+              ee = sqrt(mean(cubre) * mean(1 - cubre) / n())) %>% 
     mutate(across(where(is_numeric), round, 3))
 ```
 
