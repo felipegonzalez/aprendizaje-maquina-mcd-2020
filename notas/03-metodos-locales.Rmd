@@ -7,7 +7,7 @@ Para empezar, es poco creíble que el modelo
 $$f(x) = b_0 + b_1x_1 + \cdots b_p x_p$$
 se cumple exactamente para el fenómeno que estamos tratando. Pero regresión lineal muchas veces supera a métodos que intentan
 construir predictores más complejos. 
-Una de las primeras razones es que podemos ver la aproximación lineal como una aproximación de primer orden a la verdadera $f(X)$, y muchas veces eso es suficiente para producir predicciones razonables.
+Una de las primeras razones es que podemos ver la aproximación lineal como una aproximación de primer orden a la verdadera $f(x)$, y muchas veces eso es suficiente para producir predicciones razonables.
 
 Adicionalmente, otras veces sólo tenemos suficientes datos para hacer una aproximación de primer orden, aún cuando la verdadera
 $f(x)$ no sea lineal, y resulta que esta aproximación da buenos resultados. Esto es particularmente cierto en problemas de dimensión alta, como veremos a continuación.
@@ -43,11 +43,12 @@ Vamos a separa en muestra de entrenamiento y de prueba estos datos. Podemos
 hacerlo como sigue (2/3 para entrenamiento aproximadamente en este caso, así
 obtenemos alrededor de 100 casos para prueba):
 
-```{r}
-set.seed(213)
-datos$muestra_unif <- runif(nrow(datos), 0, 1)
-datos_entrena <- filter(datos, muestra_unif > 1/3)
-datos_prueba <- filter(datos, muestra_unif <= 1/3)
+```{r, message = FALSE}
+library(tidymodels)
+set.seed(1213)
+datos_split <- initial_split(datos, prop = 0.67)
+datos_entrena <- training(datos_split)
+datos_prueba <- testing(datos_split)
 nrow(datos_entrena)
 nrow(datos_prueba)
 ```
@@ -61,44 +62,52 @@ Consideremos un modelo de $k=15$ vecinos más cercanos. La función de predicci�
 ajustada es entonces:
 
 ```{r}
-library(kknn)
 # nótese que no normalizamos entradas - esto también es importante
 # hacer cuando hacemos vecinos más cercanos, pues en otro caso
 # las variables con escalas más grandes dominan el cálculo
-mod_15vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
-                  test = tibble(peso_kg = seq(700, 2200, by = 10)), 
-                  k=15)
-dat_graf <- tibble(peso_kg = seq(700, 2200, by = 10), 
-                       rendimiento_kpl = predict(mod_15vmc))
-ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
-  geom_point(alpha=0.6) + 
-  geom_line(data=dat_graf, col='red', size = 1.2)
+vmc_15 <- nearest_neighbor(neighbors = 15) %>% 
+  set_engine("kknn") %>% 
+  set_mode("regression")
+rend_vmc <- fit(vmc_15, rendimiento_kpl ~ peso_kg, datos_entrena)
 ```
+
+```{r}
+dat_graf <- tibble(peso_kg = seq(700, 2200, by = 10))
+dat_graf <- dat_graf %>% 
+  mutate(pred_15 = predict(rend_vmc, dat_graf) %>% pull(.pred))
+ggplot(datos_entrena, aes(x = peso_kg)) +
+  geom_point(aes(y = rendimiento_kpl), alpha = 0.6) + 
+  geom_line(data = dat_graf, aes(y = pred_15), col = 'red', size = 1.2)
+```
+
+
 
 Y para $k=5$ vecinos más cercanos:
 
 ```{r}
-mod_5vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
-                  test = tibble(peso_kg=seq(700,2200, by = 10)), 
-                  k = 5)
-dat_graf <- tibble(peso_kg = seq(700,2200, by = 10), 
-                       rendimiento_kpl = predict(mod_5vmc))
-ggplot(datos_entrena, aes(x = peso_kg, y = rendimiento_kpl)) +
-  geom_point(alpha=0.6) + 
-  geom_line(data=dat_graf, col='red', size = 1.2)
+vmc_3 <- nearest_neighbor(neighbors = 3) %>% 
+  set_engine("kknn") %>% 
+  set_mode("regression")
+rend_vmc_3 <- fit(vmc_3, rendimiento_kpl ~ peso_kg, datos_entrena)
+dat_graf <- dat_graf %>% 
+  mutate(pred_5 = predict(rend_vmc_3, dat_graf) %>% pull(.pred))
+ggplot(datos_entrena, aes(x = peso_kg)) +
+  geom_point(aes(y = rendimiento_kpl), alpha = 0.6) + 
+  geom_line(data = dat_graf, aes(y = pred_5), col = 'red', size = 1.2)
 ```
 
 En nuestro caso, los errores de prueba son
 
 ```{r}
-mod_3vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
-                  test = datos_prueba, 
-                  k = 3)
-mod_15vmc <- kknn(rendimiento_kpl ~ peso_kg, train = datos_entrena,
-                  test = datos_prueba, 
-                  k = 15)
-(mean((datos_prueba$rendimiento_kpl-predict(mod_3vmc))^2))
-(mean((datos_prueba$rendimiento_kpl-predict(mod_15vmc))^2))
+eval_1 <- predict(rend_vmc, datos_prueba) %>% 
+  bind_cols(datos_prueba) %>% 
+  rmse(rendimiento_kpl, .pred) %>% 
+    mutate(n_vecinos = 15) 
+eval_2 <- predict(rend_vmc_3, datos_prueba) %>% 
+  bind_cols(datos_prueba) %>% 
+  rmse(rendimiento_kpl, .pred) %>% 
+    mutate(n_vecinos = 3) 
+bind_rows(eval_1, eval_2)
 ```
 
 Pregunta: ¿Cómo escogerías una $k$ adecuada para este problema? Recuerda que adecuada significa que se reduzca a mínimo posible
@@ -134,13 +143,14 @@ ggplot(dat %>% mutate(x_1 = map_dbl(x, 1), x_2 = map_dbl(x, 2)),
        aes(x = x_1, y = x_2, colour = y)) + geom_point()
 ```
 
-La mejor predicción en $x_0 = (0,0)$ es $f((0,0)) = 1$. Eñ vecino más
+La mejor predicción en $x_0 = (0,0)$ es $f((0,0)) = 1$. El vecino más
 cercano al origen es
 ```{r}
 dat <- dat %>% mutate(dist_origen = map_dbl(x, ~ sqrt(sum(.x^2)))) %>% 
   arrange(dist_origen)
 mas_cercano <- dat[1, ]
-mas_cercano; mas_cercano$x[[1]]
+mas_cercano
+mas_cercano$x[[1]]
 ```
 Nuestra predicción es entonces $\hat{f}(0)=$ `r mas_cercano$y`, que
 es bastante cercano al valor verdadero (1).
@@ -154,7 +164,8 @@ dat <- tibble(x = x) %>%
 dat <- dat %>% mutate(dist_origen = map_dbl(x, ~ sqrt(sum(.x^2)))) %>% 
   arrange(dist_origen)
 mas_cercano <- dat[1, ]
-mas_cercano; mas_cercano$x[[1]]
+mas_cercano
+mas_cercano$x[[1]]
 ```
 
 Y el resultado es un desastre. Nuestra predicción es
@@ -162,7 +173,7 @@ Y el resultado es un desastre. Nuestra predicción es
 mas_cercano$y
 ```
 Necesitariamos una muestra de alrededor de  un millón de casos
-para obtener resultados no tan malos (pruébalo).
+para obtener resultados no tan malos (haz pruebas).
 
 ¿Qué es lo que está pasando? La razón es que en dimensiones altas, 
 los puntos de la muestra de entrenamiento están muy lejos 
@@ -278,3 +289,24 @@ entonces regresión lineal explota la estructura para hacer *pooling*
 de toda la información para construir predicción con sesgo y varianza bajas.
 En contraste, vecinos más cercanos sufre de varianza alta.
 
+```{block2, type="comentario"}
+**Métodos locales** muchas veces no funcionan bien en dimensión alta. La razón es 
+que:
+  
+- El sesgo es alto, pues promediamos puntos muy lejanos al lugar donde queremos predecir
+(aunque tomemos pocos vecinos cercanos).
+- En el caso de que encontremos unos pocos puntos cercanos, la varianza también 
+puede ser alta porque
+promediamos relativamente pocos vecinons.
+
+Métodos con más estructura global,  apropiada para el problema, 
+logran explotar apropiadamente
+información de puntos que no están tan cerca del lugar donde queremos predecir. 
+
+```
+
+Muchas veces el éxito en la predicción depende de establecer esas estructuras 
+apropiadas (por ejemplo, efectos lineales cuando variables tienen efectos aproximadamente
+lineales, árboles cuando hay algunas interacciones, redes convolucionales
+para procesamiento de imágenes y señales, dependencia del contexto inmediato en modelos
+de lenguaje, etc.)
