@@ -190,9 +190,10 @@ limpiar_casas <- function(datos){
            precio_miles = SalePrice / 1000, 
            habitable_m2 = (GrLivArea * 0.092903),
            precio_m2_miles = precio_miles / habitable_m2,
-           calidad = OverallQual - 6) %>%
+           calidad = OverallQual - 6, 
+           habitaciones = BedroomAbvGr) %>%
     filter(SaleCondition %in% c("Normal", "AdjLand")) %>% 
-    select(Id, tiene_piso_2:calidad) 
+    select(Id, tiene_piso_2:habitaciones) 
   datos_limpios
 } 
 datos_exp <- limpiar_casas(train)
@@ -218,7 +219,7 @@ train_tbl <- limpiar_casas(train)
 test_tbl <- limpiar_casas(test)
 # usamos recipes para este ejemplo, no necesitas usarlo
 casas_receta <- recipe(precio_m2_miles ~ ., train_tbl) %>%
-  update_role(Id, precio_miles, habitable_m2, new_role = "none") 
+  update_role(Id, precio_miles, habitable_m2, habitaciones, new_role = "none") 
 casas_receta %>% summary()
 ```
 
@@ -826,8 +827,9 @@ importantes que debemos tomar en cuenta.
 En primer lugar, podemos separar la interpretación en dos modalidades:
 
 1. Entender cómo calcula nuestro modelo las predicciones. 
-2. Entender aspectos del fenóomeno de interés a través de nuestro modelo. Por ejemplo,
-interpretar un coeficiente positivo como
+2. Entender aspectos del fenómeno de interés a través de nuestro modelo. Por ejemplo,
+interpretar un coeficiente positivo como el efecto en nuevos datos de cambiar
+una variable que podemos manipular.
 
 Las interpretaciones del tipo 1 son en general simples para modelos lineales,
 y sirven para explicar la estructura del modelo. Para modelos más complicados es 
@@ -852,10 +854,11 @@ los coeficientes.
 
 Consideramos otro modelo para estudiar su estructura:
 
-```{r}
+```{r, collapse = TRUE}
 train_tbl <- train_tbl %>% mutate(habitable_100_m2_c = (habitable_m2 - mean(habitable_m2))/100)
 modelo_casas <- lm( precio_m2_miles ~ 1 + calidad + tiene_piso_2 + habitable_100_m2_c, data = train_tbl)
 # interpretar en miles de dólares
+cat("Coeficientes para precio por metro cuadrado \n")
 1000*(coef(modelo_casas) %>% round(2))
 ```
 
@@ -924,7 +927,30 @@ no consideramos que hay otra variable importante, que es el interés de la
 persona en compra de TVs Samsung. Sin embargo, ningún diagnóstico del
 modelo nos puede decir de esta especificación incorrecta.
 
-En general, la recomendación es que las interpretaciones causales deben considerarse
+Notamos otro ejemplo en nuestro análisis anterior. Si consideramos 
+el modelo simple para precio en miles de dólares:
+
+```{r}
+modelo_casas_1 <- lm( precio_miles ~ 1 + habitaciones, data = train_tbl)
+(coef(modelo_casas_1) %>% round(2))
+```
+
+¿Esto implica entonces que mejorar el valor de una casa conviene dividir habitaciones?
+Probablemente no. Por ejemplo, para un tamaño de casa fijo, el coeficiente de 
+número de habitaciones es negativo.
+
+```{r}
+modelo_casas_2 <- lm( precio_miles ~ 1 + calidad + habitaciones + habitable_100_m2_c , data = train_tbl)
+(coef(modelo_casas_2) %>% round(2))
+```
+
+--- 
+
+Para construir modelos apropiados e interpretaciones adecuadas se requiere tener
+las variables y datos importantes, los modelos correctos tanto en términos estadísticos como
+en términos de conocimiento de dominio, y entender cómo es el proceso generador de 
+los datos que estamos utilizando. En general, la recomendación es que las 
+interpretaciones causales deben considerarse
 como preliminares bajo ciertos supuestos, y se requiere más análisis y consideraciones
 antes de poder tener interpretaciones causales sólidas (ver @KingCausal y @GelmanHill,
 por ejemplo). 
