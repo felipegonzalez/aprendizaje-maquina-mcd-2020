@@ -1,0 +1,211 @@
+---
+title: "Tarea 3: Modelos lineales"
+output: html_document
+---
+
+# Lectura
+
+Lee las páginas 167 - 172 de el Capítulo 9 de 
+[este libro](http://www.stat.columbia.edu/~gelman/arm/) de Gelman y Hill. 
+El capítulo 9 está aquí:
+
+http://www.stat.columbia.edu/~gelman/arm/chap9.pdf
+
+Esta lectura es de nivel medio/avanzado. 
+
+1. (p 167) ¿Qué son las comparaciones predictivas según el texto? (nota: puedes ignorar
+la frase "infinite superpopulation", en lugar de eso piensa que se trata una muestra
+de una distribución, o de un proceso que genera los datos. Por ejemplo, tomar muestras de
+una base de datos).
+
+2. (p 167) ¿Cuál es la diferencia de las comparaciones predictivas e inferencia causal? 
+Según Gelman y Hill, ¿cuál requiere más supuestos?
+
+3. En nuestro curso, qué tipo de análisis (predictivo o causal) nos interesa hacer principalmente?
+
+4. (167-168) Explica en tus palabras cómo puedes obtener un efecto causal de cero, pero
+una comparación predictiva positiva (coeficiente de regresión positivo)
+
+5. (168-169) Explica en tus palabras cómo podrías obtener un efecto causal positivo,
+pero una comparación predictiva igual a cero (coeficiente de regresión cero)
+
+6. En los ejemplos anteriores, ¿cuál es la variable omitida que dificulta interpretar
+causalmente la comparación predictiva?
+
+7. Explica cuál es el problema fundamental de inferencia causal.
+
+# Ejercicio
+
+
+```{r, warnings = FALSE, messages =FALSE}
+library(tidyverse)
+library(tidymodels)
+```
+
+
+En el siguiente problema queremos predecir el porcentaje
+de grasa corporal (que es relativamente costoso de medir) en
+términos de distintas medidas del cuerpo (estatura, peso, 
+circunferencia de abdomen, etc.) Usaremos [estos datos](http://jse.amstat.org/v4n1/datasets.johnson.html). 
+
+```{r}
+bodyfat <- read_csv('../datos/bodyfat.csv')
+```
+
+
+Vamos a ajustamos un modelo lineal de la forma:
+
+$grasacorp ~ b_0 + b_1 estatura + b_2 abdomen + b_3 muñeca + b_4 rodilla$
+
+
+### Parte 1: separar muestra de entrenamiento y de prueba:
+
+Separa los datos a la mitad: 50\% de entrenamiento y 50\% de prueba aproximadamente:
+
+```{r}
+set.seed(1931) 
+bodyfat_split <- initial_split(bodyfat, prop = 0.5)
+dat_ent <- training(bodyfat_split)
+dat_pr <- testing(bodyfat_split)
+nrow(dat_ent)
+nrow(dat_pr)
+```
+
+**Pregunta**: ¿Por qué en este ejemplo no sería buena idea tomar, por ejemplo,
+90\% de datos para entrenamiento y 10\% para prueba?
+
+
+### Parte 2: Calcula  algunos resúmenes de los datos de entrenamiento
+
+Calcula al menos mínimo, máximo y algunos percentiles para
+las variables *estatura*, *abdomen*, *muñeca*, *rodilla* y *grasacorp*.  Por ejemplo:
+
+```{r}
+quantile(dat_ent$muñeca)
+quantile(dat_ent$abdomen)
+ggplot(dat_ent, aes(x = abdomen, y = muñeca)) + geom_point()
+ggplot(dat_ent, aes(x = muñeca, y = estatura)) + geom_point()
+```
+
+**Preguntas**:  
+
+- ¿Ves algunos datos problemáticos o posiblemente erróneos? Si los ves,
+¿qué piensas que podría ser una buena estrategia para tratarlos?
+
+- ¿Las variables de interés tienen escalas similares? Por ejemplo, las mediciones
+de abdomen y muñeca?
+
+### Parte 3: Preprocesamiento de datos
+
+Estandarizamos los datos antes de ajustar un modelo (especialmente importante
+si vamos a usar descenso en gradiente). **Nótese que este preprocesamiento
+se hace solamente con los datos de entrenamiento**
+
+```{r}
+receta_bodyfat <- 
+  recipe(grasacorp ~ abdomen + estatura + muñeca + rodilla, dat_ent) %>% 
+  #step_filter(abdomen < 130) %>% # podemos restringir en qué rangos queremos predecir
+  step_normalize(all_predictors()) # estandarizar
+```
+
+Examinamos los datos estandarizados
+
+```{r}
+entrena_procesado <- receta_bodyfat %>% prep(dat_ent) %>% juice()
+entrena_procesado
+```
+
+**Pregunta**: ¿cuál es la media y desviación estándar de cada variable de este último
+conjunto de datos?
+
+
+### Parte 3:  Ajusta un modelo líneal 
+
+En este caso usaremos la función *lm* de R:
+
+```{r}
+modelo_bodyfat <- linear_reg() %>% 
+  set_engine("lm") %>% 
+  set_mode("regression") 
+# correr el flujo de procesamiento y ajuste:
+flujo <- workflow() %>% add_recipe(receta_bodyfat) %>% 
+  add_model(modelo_bodyfat)
+flujo_ajustado <- flujo %>% fit(dat_ent)
+flujo_ajustado
+```
+
+**Pregunta**: 
+
+- Discute si es razonable la forma en que este modelo pondera
+las variables para predecir la grasa corporal
+
+- ¿Cuál es la predicción para un individuo cuyas medidas de abdomen, estatura,
+muñeca y rodilla están en el promedio del conjunto de entrenamiento?
+
+- Ahora imagina que tuviéramos un tratamiento nuevo para reducir el tamaño del abdomen.
+¿Crees que este modelo serviría para predecir que pasa si alguien reduce su tamaño de 
+abdomen con este tratamiento? ¿Por qué sí o no?
+
+
+### Parte 4: Evalúa con muestra de prueba
+
+Podemos ver los datos preprocesados de prueba de la siguiente forma:
+
+```{r}
+receta_ajustada <- flujo_ajustado %>% pull_workflow_prepped_recipe
+prueba_procesado <- bake(receta_ajustada, dat_pr)
+prueba_procesado
+```
+
+**Pregunta**: estos datos están estandarizados con las medias y desviaciones
+estándar de los datos de entrenamiento (el *bake* usa el flujo ajustado con
+datos de entrenamiento y **no** recalcula medias y desviación estándar). 
+Explica por qué es necesario hacerlo
+así, y cuál es el riesgo de hacerlo de otra manera.
+
+Evaluamos el error de prueba (podemos preprocesar los datos de prueba usando el flujo):
+
+```{r}
+# nota: usamos los datos sin procesar, el flujo se encarga
+# de estandarizar y filtrar
+datos_eval <- predict(flujo_ajustado, dat_pr) %>% 
+  bind_cols(dat_pr) 
+datos_eval %>% 
+  rmse(grasacorp, .pred) 
+```
+
+```{r}
+ggplot(datos_eval, aes(x = .pred, y = grasacorp)) + geom_point() +
+  geom_abline()
+```
+
+
+El error de entrenamiento es:
+
+```{r}
+predict(flujo_ajustado, dat_ent) %>% 
+  bind_cols(dat_ent) %>% 
+  rmse(grasacorp, .pred) 
+```
+
+
+**Pregunta**: ¿Cómo se compara el error de prueba con la variación que existe en la 
+variable grasa corporal? Compara por ejemplo con
+
+
+#### Postmortem
+
+En prueba obtuvimos una predicción muy fuera del rango usual, lo cual presenta un riesgo al usar
+nuestro modelo. Podemos examinar qué pasó:
+
+```{r}
+datos_eval <- datos_eval %>% mutate(pred_grande = .pred > 40)
+ggplot(datos_eval, aes(x = abdomen, y = estatura, colour = pred_grande)) +
+  geom_point()
+```
+**Pregunta**. ¿cuál es la razón de que la predicción sea tan mala para este ejemplo
+particular? ¿Crees que ese dato sea correcto? Si en la práctica encontraras
+un individuo con esta medición, ¿qué harías? ¿Cuál es el error de prueba sin este caso?
+
+
+
