@@ -973,9 +973,9 @@ predecimos que van a hacer compras grandes futuras) pues queremos diseñar una i
 para mejorar su satisfacción, mejorar su retención, o aumentar su valor de algún modo. Ahora 
 imaginemos que tenemos dos clientes, cuya predicción es
 igual a 10,000. Sin embargo, tenemos incertidumbre alta acerca del cliente A (podría ir de
-10 a 20 mil), mientras que para cliente B tenemos incertidumbre relativamente baja
-(por ejemplo, de 7 mil a 15 mil pesos). Si el tratamiento es costoso, puedes ser que
-preferamos tratar a B (si somos aversos al riesgo) en lugar de A.
+2 a 20 mil), mientras que para cliente B tenemos incertidumbre relativamente baja
+(por ejemplo, de 8 mil a 12 mil pesos). Si el tratamiento es costoso, puedes ser que
+preferamos tratar a B en lugar de A.
 
 Otro ejemplo es si queremos hacer pronósticos de ventas 
 o inventarios para tiendas individuales de una cadena
@@ -1042,6 +1042,6 @@ casas_int %>%
     mutate(cubre = precio_miles > .pred_lower & precio_miles < .pred_upper) %>% 
     summarise(cobertura = mean(cubre), 
               ee = sqrt(mean(cubre) * mean(1 - cubre) / n())) %>% 
-    mutate(across(where(is_numeric), round, 3))
+    mutate(across(where(is.numeric), ~ round(.x, 3)))
 ```
 
