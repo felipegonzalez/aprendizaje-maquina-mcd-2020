@@ -290,20 +290,63 @@ clasificador logístico de diabetes en términos de imc y edad. Calcula
 adicionalmente con la muestra de prueba sus valores de especificidad y sensibilidad, y precisión y recall. 
 
 ```{r, warnings=FALSE, messages=FALSE}
-diabetes_ent <- as_tibble(MASS::Pima.tr)
-diabetes_pr <- as_tibble(MASS::Pima.te)
-mod_1 <- glm(type ~ bmi + age, data = diabetes_ent, family = 'binomial')
-preds_prueba <- predict(mod_1, newdata = diabetes_pr, type ='response')
-# rellena esta linea en términos de preds_prueba
-clase_pred <- preds_prueba > 0.5
-confusion <- table(clase_pred, diabetes_pr$type)
-confusion
+diabetes_ent <- as_tibble(MASS::Pima.tr) %>% mutate(type = as.character(type))
+diabetes_pr <- as_tibble(MASS::Pima.te) %>% mutate(type = as.character(type))
+# normalizer
+receta_diabetes <- recipe(type ~ bmi + age, diabetes_ent) %>%
+  step_mutate(type = factor(type, levels = c("Yes", "No"))) %>% 
+  step_normalize(all_predictors()) %>% 
+  prep()
+# ajustar
+library(keras)
+mod_1 <- logistic_reg() %>% 
+  set_engine("keras") %>% 
+  set_mode("classification") %>%
+  set_args(epochs = 50, optimizer = optimizer_sgd(lr = 0.5),
+           batch_size = nrow(diabetes_ent), 
+           verbose = FALSE) %>% 
+  fit(type ~ bmi + age, juice(receta_diabetes))
+# otra opcion es
+# mod_1 <- logistic_reg() %>% set_engine("glm") %>% set_mode("classification")
 ```
 
-Ahora calculamos recall y precisión:
+Ahora probamos. Primero calculamos directamente:
+
+```{r, warnings=FALSE, messages=FALSE}
+prueba_baked <- bake(receta_diabetes, diabetes_pr)
+preds_prueba <- predict(mod_1, prueba_baked, type ='prob') %>% 
+  bind_cols(prueba_baked)
+# usar punto de corte 0.5
+preds_prueba <- preds_prueba %>% 
+  mutate(clase_pred_g = ifelse(preds_prueba$.pred_Yes > 0.5, "pred_Yes", "pred_No")) 
+# calcular matriz de confusión
+confusion <- preds_prueba %>% 
+  group_by(type, clase_pred_g) %>% 
+  count() %>% pivot_wider(names_from = type, values_from = n) %>% 
+  ungroup() %>% 
+  column_to_rownames("clase_pred_g")
+# en los renglones están las predicciones
+confusion[c("pred_Yes", "pred_No"), ]
+```
+
+Finalmente podemos calcular:
 
 ```{r}
-sensibilidad <- confusion[2, 2] / sum(confusion[, 2])
-precision <- confusion[2, 2] / sum(confusion[2, ])
-sprintf("Precisión: %.2f, Sensibilidad (recall): %.2f", precision, sensibilidad)
+sensibilidad_1 <- confusion["pred_Yes", "Yes"] / sum(confusion[, "Yes"])
+precision_1 <- confusion["pred_Yes", "Yes"] / sum(confusion["pred_Yes", ])
+sprintf("Precisión: %.2f, Sensibilidad (recall): %.2f", precision_1, sensibilidad_1)
 ```
+
+
+O también podemos hacer:
+
+```{r}
+preds_prueba <- preds_prueba %>% 
+  mutate(clase_pred = ifelse(.pred_Yes > 0.5, "Yes", "No")) %>% 
+  mutate(clase_pred = factor(clase_pred, levels = c("Yes", "No")))
+## calcular con yardstick
+metricas <- metric_set(accuracy, precision, recall)
+preds_prueba %>% 
+  metricas(type, estimate = clase_pred)
+```
+
