@@ -84,18 +84,19 @@ p_{K-1}(x) &= P(g=K-1|x)
 
 A partir de estas probabilidades de clase podemos producir un clasificador de 
 varias maneras (las discutiremos más adelante). La
-forma más simple es usando el clasificador de Bayes. Nótese sin embargo que
-este clasificador colapsa información útil de las probabilidades de clase
-(por ejemplo, no es lo mismo que $p_1(x) = 0.55$ vs $p_1(x) = 0.98$: cada uno
-de estos casos puede requerir decisiones diferentes).
+forma más simple es usando el clasificador de Bayes: 
 
 ```{block2, type = 'comentario'}
 Dadas las probabilidades condicionales $p_0(x),p_1(x),p_2(x),\ldots, p_{K-1}(x)$, el 
 **clasificador de Bayes** asociado está dado por
-$$g (x) = \arg\max_{g} p_g(x)$$
+$$\hat{g}_{bayes} (x) = \arg\max_{g} p_g(x)$$
 Es decir, clasificamos en la clase que tiene máxima probabilidad de ocurrir.
 ```
 
+Nótese sin embargo que
+este clasificador colapsa información útil de las probabilidades de clase
+(por ejemplo, no es lo mismo que $p_1(x) = 0.55$ vs $p_1(x) = 0.98$: cada uno
+de estos casos puede requerir decisiones diferentes).
 
 
 
@@ -106,7 +107,7 @@ $1$ corresponde al corriente y $0$ representa impago.
  Las probabilidades condicionales de clase para la clase *al corriente* podrían
  ser, por ejemplo:
 
-- $p_1(x) = P(g=1|x) =0.95$  si $x < 0.15\%$
+- $p_1(x) = P(g=1|x) =0.95$  si $x < 0.15$
 - $p_1(x) = P(g=1|x) = 0.95 - 0.7(x - 0.15)$ si $x>=0.15$
   
 Estas son probabilidades, pues hay otras variables que influyen en que un cliente
@@ -128,7 +129,7 @@ ggplot(tibble(x = seq(0, 1, 0.01)), aes(x = x)) +
 Si usamos el clasificador de Bayes, tendríamos por ejemplo que
 si $x=10\%$, como $p_1(10\%) = 0.95$ y $p_0(10\%)=0.05$, nuestra predicción
 de clase sería $\hat{g}(10\%) = 1$ (al corriente), pero si $x=90\%$,
-$\hat{g}(70\%) = 1$ (impago), pues $p_1(70\%) = 0.425$ y $p_0(70\%) = 0.575$.
+$\hat{g}(90\%) = 0$ (impago), pues $p_1(90\%) = 0.425$ y $p_0(90\%) = 0.575$.
 
 
 ## Estimación de probabilidades de clase
@@ -295,7 +296,7 @@ Ahora necesitamos una pérdida apropiada para trabajar con modelos de clasificac
 
 Consideremos entonces que tenemos una estimación $\hat{p}_g(x)$ de las probabilidad
 de clase. Supongamos que observamos ahora $(x, g)$ (la clase
-verdadera es $g^0$).
+verdadera es $g$).
 
 - Si 
 $\hat{p}_{g}(x)$ es muy cercana a uno, deberíamos penalizar poco, pues dimos
@@ -450,7 +451,7 @@ forma:
 ```{block2, type='comentario'}
 Sean $\hat{p}_g(x)$ probabilidades de clase estimadas. El clasificador asociado
 está dado por
-$$\hat{G} (x) = \arg\max_g \hat{p}_g(x)$$
+$$\hat{g} (x) = \arg\max_g \hat{p}_g(x)$$
 Podemos estimar su  error de clasificación $P(\hat{g}(x) \neq g)$ con una muestra
 de prueba
 $${\mathcal T}=\{ (x_0^{(1)},g_0^{(1)}),(x_0^{(2)},g_0^{(2)}), \ldots, (x_0^{(m)}, g_0^{(m)})$$
@@ -503,5 +504,6 @@ sino identificar casos con probabilidades altas de una clase u otra.
 misma tasa de correctos, preferimos aquellos modelos que lo hacen con probabilidades
 que discriminan más (más altas cuando está en lo correcto y más bajas cuando 
 se equivoca).
+
 
 
