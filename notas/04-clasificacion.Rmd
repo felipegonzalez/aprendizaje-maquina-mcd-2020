@@ -507,3 +507,262 @@ se equivoca).
 
 
 
+## Regresión logística
+
+En $k$ vecinos más cercanos, intentamos estimar directamente con promedios
+las probabilidades de clase, sin considerar ninguna estructura. Ahora
+consideramos modelos más estructurados, definidos por parámetros, e intentaremos
+ajustarlos minimizando devianza. 
+
+Igual que en regresión lineal, algunos de los modelos
+más simples que podemos imaginar son modelos lineales. Solo es necesario
+hacer una adaptación. 
+
+Supongamos que nuestra variable respuesta es $y$, que toma valores 0 o 1.
+
+Ahora queremos definir $p(x) = p_1(x)$ (probabilidad de que ocurra la clase 1)
+en términos de un promedio ponderado de
+las variables de entrada, como en regresión lineal:
+
+$$\beta_0 + \beta_1 x_1 + \beta_2 x_2 + \cdots + \beta_px_p.$$
+
+Sin embargo, observamos que esta expresión puede
+dar valores negativos o mayores a uno, de forma que no necesariamente
+puede interpetarse como una probabilidad $p(x)$. Una de las formas más sencillas
+de resolver este problema es transformar esta expresión para que necesariamente
+esté en $[0,1]$ por medio de una función fija $h$:
+
+$$p_{\beta}(x) = h(\beta_0 + \beta_1 x_1 + \beta_2 x_2 + \cdots + \beta_px_p),$$
+donde $h$ debe ser una función que mapea valores reales a valores en $[0,1]$. 
+
+En este punto hay muchas funciones que podríamos usar. Para simplificar la interpretación y uso de este modelo, podemos escoger entre funciones que satisfagan, por ejemplo:
+
+1. $h$ toma valores en $[0,1]$ es creciente y diferenciable
+2. $h(0) = 0.5$ (0 equivale a probabilidad 0.5, negativos dan probabilidades menores a 0.5 y positivos dan probabilidades mayores a 0.5)
+3. $h(-x)=1-h(x)$ (simetría). Por ejemplo, si $h(-2)=0.16$ entonces $h(2)= 1-0.16=0.84$. 
+
+Hay todavía muchas opciones. Una de las más simples es usar la función
+logística
+
+```{block2, type='comentario'}
+La función logística está dada por
+$$h(x)=\frac{e^x}{1+e^x}$$
+``` 
+
+```{r, fig.width = 4, fig.asp =0.5}
+h <- function(x){exp(x)/(1+exp(x)) }
+ggplot(tibble(x = seq(-6, 6, 0.01)), aes(x = x)) + stat_function(fun = h)
+```
+
+
+Esta función comprime adecuadamente (para nuestros propósitos) 
+el rango de todos los reales dentro del intervalo $[0,1]$. Si aplicamos
+al predictor lineal que consideramos, obtenemos:
+
+
+```{block2, type='comentario'}
+El **modelo de regresión logística**  está dado por
+$$p_1(x)=p_1(x;\beta)= h(\beta_0+\beta_1x_1 + \beta_2 x_2 + \cdots + \beta_p x_p)$$
+    
+y $$p_0(x)=p_0(x;\beta)=1-p_1(x;\beta),$$
+donde $\beta=(\beta_0,\beta_1, \beta_2, \cdots, \beta_p)$.
+```
+
+### Ejemplo {-}
+
+Consideremos nuestro ejemplo de impago. Podemos examinar qué tipo
+de probilidades obtendríamos con regresión logística y distintos parametros beta:
+
+```{r, fig.width = 8, fig.asp = 0.5}
+crear_p <- function(beta_0, beta_1){
+    function(x){
+        h(beta_0 + beta_1 * x)
+    }
+}
+df_grid <- tibble(x = seq(0, 1, 0.01))
+betas <- tibble(beta_0 = c(-5, -0.5, 2.5),
+                beta_1 = c(10,   -2, -4))
+
+betas <- betas %>% 
+    mutate(p = map2(beta_0, beta_1, crear_p)) %>% 
+    mutate(grid = map(p, ~ df_grid %>% mutate(p_1 = .(x)))) %>% 
+    select(-p) %>% 
+    mutate(fun_nom = paste(beta_0, "+", beta_1, "x")) %>% 
+    unnest(cols = c(grid))
+
+
+graf_1 + geom_line(data = betas, aes(x = x, y = p_1)) + facet_wrap(~fun_nom) 
+```
+
+Experimenta con otros valores de $\beta_0$ y $\beta_1$.
+
+## Aprendizaje de coeficientes para regresión logística (binomial).
+
+
+Ahora veremos cómo aprender los coeficientes con una muestra de entrenamiento. La idea
+general es :
+
+- Usamos la devianza de entrenamiento como medida de ajuste
+- Usamos descenso en gradiente para minimizar esta devianza y aprender los coeficientes.
+
+
+Sea entonces ${\mathcal L}$ una muestra de entrenamiento:
+
+$${\mathcal L}=\{ (x^{(1)},y^{(1)}),(x^{(2)},y^{(2)}), \ldots, (x^{(N)}, y^{(N)}) \}$$
+
+Donde $y=1$ o $y=0$ son las dos clases. Escribimos también
+
+
+$$p_1(x)=p_1(x;\beta)= h(\beta_0+\beta_1x_1 + \beta_2x_2 +\cdots + \beta_p x_p),$$
+
+y definimos la devianza sobre el conjunto de entrenamiento
+
+$$D(\beta) = -\frac{2}{N}\sum_{i=1}^N \log(p_{y^{(i)}} (x^{(i)})).$$ 
+
+Los **coeficientes estimados por regresión logística** están dados por
+$$\hat{\beta} = \arg\min_\beta D(\beta)$$
+
+Para minimizar utilizaremos descenso en gradiente (aunque hay más opciones).
+
+La última expresión para $D(\beta)$ puede ser difícil de operar, pero podemos reescribir como:
+$$D(\beta) = -\frac{2}{N}\sum_{i=1}^N y^{(i)} \log(p_{1} (x^{(i)})) + (1-y^{(i)}) \log(p_{0} (x^{(i)})).$$ 
+
+
+Para hacer descenso en gradiente, necesitamos encontrar $\frac{\partial D}{\beta_j}$
+para $j=1,2,\ldots,p$.
+
+Igual que en regresión lineal, comenzamos por calcular la derivada de un término:
+
+$$D^{(i)} (\beta) = y^{(i)} \log(p_{1} (x^{(i)})) + (1-y^{(i)}) \log(1-p_{1} (x^{(i)}))$$
+
+
+Calculamos primero las derivadas de $p_1 (x^{(i)};\beta)$ (demostrar la siguiente ecuación):
+$$\frac{\partial  p_1}{\partial \beta_0} = {p_1(x^{(i)})(1-p_1(x^{(i)}))},$$
+y 
+$$\frac{\partial  p_1}{\partial \beta_j} = p_1(x^{(i)})(1-p_1(x^{(i)}))x_j^{(i)},$$
+
+Así que
+\begin{align*}
+\frac{\partial D^{(i)}}{\partial \beta_j} &= \frac{y^{(i)}}{(p_1(x^{(i)}))}\frac{\partial  p_1}{\partial \beta_j} -
+\frac{1- y^{(i)}}{(1-p_1(x^{(i)}))}\frac{\partial  p_1}{\partial \beta_j} \\
+ &= \left( \frac{y^{(i)} - p_1(x^{(i)})}{(p_1(x^{(i)}))(1-p_1(x^{(i)}))}  \right )\frac{\partial  p_1}{\partial \beta_j} \\
+ & = \left ( y^{(i)} - p_1(x^{(i)}) \right ) x_j^{(i)} \\ 
+\end{align*}
+
+para $j=0,1,\ldots,p$, usando la convención de $x_0^{(i)}=1$. Podemos sumar
+ahora sobre la muestra de entrenamiento para obtener
+
+
+$$ \frac{\partial D}{\partial\beta_j} = - \frac{2}{N}\sum_{i=1}^N  (y^{(i)}-p(x^{(i)}))x_j^{(i)}$$
+
+De modo que, 
+
+```{block2, type='comentario'}
+Para un paso $\eta>0$ fijo, la iteración de descenso para regresión logística para
+el coeficiente $\beta_j$ es:
+$$\beta_{j}^{(k+1)} = \beta_j^{(k)} + {\eta}{\frac{2}{N}} \sum_{i=1}^N (y^{(i)}-p(x^{(i)}))x_j^{(i)}$$
+para 
+$j=0,1,\ldots, p$, donde fijamos $x_0^{(i)}=1$.
+```
+
+
+Podríamos usar las siguientes implementaciones, que representan cambios
+menores de lo que hicimos en regresión lineal. En primer lugar,
+escribimos la función que calcula la devianza. Podríamos poner:
+
+```{r}
+devianza_calc_simple <- function(x, y){
+  dev_fun <- function(beta){
+    p_beta <- h(as.matrix(cbind(1, x)) %*% beta) 
+   -2*mean(y*log(p_beta) + (1-y)*log(1-p_beta))
+  }
+  dev_fun
+}
+```
+
+
+***Observación** 
+Sin embargo, podemos hacer una simplificación para tener mejor desempeño y estabilidad.
+Observamos que 
+$$\log (p_1(x;\beta)) = \log\frac{ e^{x^t \beta}}{1+ e^{x^t\beta}} =
+x^t\beta - \log Z$$
+donde $Z = 1+ e^{x^t\beta}$. Por otra parte
+$$\log(p_0(x;\beta)) = \log\frac{ 1}{1+ e^{x^t\beta}} = - \log Z$$
+De modo que 
+$$y\log(p_1(x;\beta)) + (1- y)\log(p_0(x;\beta)) = yx^t\beta - \log Z= yx^t\beta - \log (1+e^{x^t\beta})$$
+Así que podemos escribir:
+```{r}
+devianza_calc <- function(x, y){
+  dev_fun <- function(beta){
+    x_beta <- as.matrix(cbind(1, x)) %*% beta
+   -2 * mean(y * x_beta - log(1 + exp(x_beta)))
+  }
+  dev_fun
+}
+```
+```{r}
+grad_calc <- function(x_ent, y_ent){
+  salida_grad <- function(beta){
+    N <- nrow(x_ent)
+    p_beta <- h(as.matrix(cbind(1, x_ent)) %*% beta) 
+    e <- y_ent - p_beta
+    grad_out <- - (2 / N) * as.numeric(t(cbind(1,x_ent)) %*% e)
+    names(grad_out) <- c('Intercept', colnames(x_ent))
+    grad_out
+  }
+  salida_grad
+}
+descenso <- function(n, z_0, eta, h_deriv){
+  z <- matrix(0,n, length(z_0))
+  z[1, ] <- z_0
+  for(i in 1:(n-1)){
+    z[i+1, ] <- z[i, ] - eta * h_deriv(z[i, ])
+  }
+  z
+}
+```
+#### Ejemplo {-}
+
+Probemos nuestros cálculos con el ejemplo de 1 entrada de tarjetas de crédito.
+```{r}
+dat_ent$y <- as.numeric(dat_ent$g==1)
+dat_ent <- dat_ent %>% ungroup %>% mutate(x_s = (x - mean(x))/sd(x))
+devianza <- devianza_calc_simple(dat_ent[, 'x_s', drop = FALSE], dat_ent$y)
+grad <- grad_calc(dat_ent[, 'x_s', drop = FALSE], dat_ent$y)
+grad(c(0,1))
+grad(c(0.5,-0.1))
+```
+
+Verificamos cálculo de gradiente:
+```{r}
+(devianza(c(0.5+0.0001,-0.1)) - devianza(c(0.5,-0.1)))/0.0001
+(devianza(c(0.5,-0.1+0.0001)) - devianza(c(0.5,-0.1)))/0.0001
+```
+Y hacemos descenso:
+```{r, fig.width=5, fig.asp=0.8}
+iteraciones <- descenso(1000, z_0 = c(0,0), eta = 0.1, h_deriv = grad)
+tail(iteraciones, 20)
+#Checamos devianza
+qplot(1:nrow(iteraciones), apply(iteraciones, 1, devianza)) +
+    xlab("Iteración") + ylab("Devianza")
+# Y gradiente de devianza en la iteración final:
+grad(iteraciones[nrow(iteraciones), ])
+```
+
+Comparamos con glm:
+
+```{r}
+mod_1 <- glm(y ~ x_s, data = dat_ent, family = 'binomial') 
+coef(mod_1)
+mod_1$deviance
+devianza(iteraciones[200,])
+```
+
+La devianza que obtenemos con nuestros cálculos es:
+
+```{r}
+mod_1$deviance / nrow(dat_ent)
+devianza(iteraciones[200,])
+```
+
+
