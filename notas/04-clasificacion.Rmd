@@ -146,8 +146,6 @@ dos métodos: k-vecinos más cercanos y regresión logística.
 Vamos a generar unos datos con el modelo simple del ejemplo anterior:
 
 ```{r, warning = FALSE, message = FALSE}
-library(tidyverse)
-library(kknn) # para hacer vecinos más cercanos
 simular_impago <- function(n = 500){
     # suponemos que los valores de x están concentrados en valores bajos,
     # quizá la manera en que los créditos son otorgados
@@ -431,6 +429,13 @@ dat_dev_prueba <- ajuste_vmc %>%
 dat_dev_prueba <- dat_dev_prueba %>% mutate(hat_p_g = ifelse(g==1, .pred_1, .pred_0))
 dat_dev_prueba <- dat_dev_prueba %>% mutate(dev = s(hat_p_g))
 dat_dev_prueba %>% ungroup %>% summarise(dev_prueba = mean(dev))
+```
+
+```{block2, type="comentario"}
+La devianza que definimos aquí se usa con otros nombres en distintos lugares.
+A veces se utiliza el término *perdida logarítmica* (log loss) o 
+*entropía cruzada*. En estos casos generalmente no se multiplica por 2 como
+definimos la devianza.
 ```
 
 
@@ -908,26 +913,16 @@ diabetes_pr$id <- 1:nrow(diabetes_pr)
 
 Normalizamos
 ```{r, message=FALSE, warning=FALSE }
-datos_norm <- diabetes_ent %>% 
-  gather(variable, valor, npreg:age) %>%
-  group_by(variable) %>%
-  summarise(media = mean(valor), de = sd(valor))
-
-normalizar <- function(datos, datos_norm){
-  datos %>% 
-    gather(variable, valor, npreg:age) %>%
-    left_join(datos_norm) %>%
-    mutate(valor_s = (valor  - media)/de) %>%
-    select(id, type, variable, valor_s) %>%
-    spread(variable, valor_s)
-}
-
-diabetes_ent_s <- normalizar(diabetes_ent, datos_norm)
-diabetes_pr_s <- normalizar(diabetes_pr, datos_norm)
+receta_diabetes <- recipe(type ~ ., diabetes_ent) %>%
+  update_role(id, new_role = "id_variable") %>% 
+  step_normalize(all_predictors()) %>% 
+  prep()
+diabetes_ent_s <- receta_diabetes %>% juice() 
+diabetes_pr_s <- receta_diabetes %>% bake(diabetes_pr)
 ```
 
 ```{r}
-x_ent <- diabetes_ent_s %>% select(age:skin) %>% as.matrix
+x_ent <- diabetes_ent_s %>% select(-type, -id) %>% as.matrix
 p <- ncol(x_ent)
 y_ent <- diabetes_ent_s$type == 'Yes'
 grad <- grad_calc(x_ent, y_ent)
@@ -942,7 +937,7 @@ diabetes_coef
 Ahora calculamos devianza de prueba y error de clasificación:
 
 ```{r}
-x_prueba <- diabetes_pr_s %>% select(age:skin) %>% as.matrix
+x_prueba <- diabetes_pr_s %>% select(-type, -id) %>% as.matrix
 y_prueba <- diabetes_pr_s$type == 'Yes'
 dev_prueba <- devianza_calc(x_prueba, y_prueba)
 dev_prueba(iteraciones[1000,])
@@ -961,8 +956,9 @@ Vamos a repetir usando keras.
 
 ```{r}
 library(keras)
-
 # definición de estructura del modelo (regresión logística)
+# es posible hacerlo con workflows como vimos arriba, 
+# pero aquí usamos directamente la interfaz de keras en R
 n_entrena <- nrow(x_ent)
 
 modelo_diabetes <- keras_model_sequential() %>%
@@ -1023,6 +1019,8 @@ get_weights(modelo_diabetes)
 Y comparamos con lo que obtenemos de *glm*:
 
 ```{r}
+# podemos hacerlo con workflows, como vimos arriba.
+# aquí usamos directamente la interfaz de glm en R
 mod_1 <- glm(type ~ ., diabetes_ent_s %>% select(-id), family = binomial()) 
 mod_1 %>% coef
 ```
@@ -1082,22 +1080,20 @@ es cortando las probabilidades en cubetas:
 # en los errores estándar sqrt(p*(1-p) / n)
 calibracion_gpos <- dat_calibracion %>% 
     mutate(proba_grupo = cut(probabilidad, 
-                             quantile(probabilidad, seq(0, 1, 0.1)),
-                             include.lowest = TRUE)) %>% 
+      quantile(probabilidad, seq(0, 1, 0.1)), include.lowest = TRUE)) %>% 
     group_by(proba_grupo) %>% 
     summarise(prob_media = mean(probabilidad), 
               n = n(),
-              obs = sum(y)) %>% 
+              obs = sum(y), .groups = "drop") %>% 
     mutate(obs_prop = (obs + 1) / (n + 1), 
            inferior = qbeta(0.025, obs + 1,  n - obs + 1),
-           superior = qbeta(0.975, obs + 1,  n - obs + 1)
-           )
+           superior = qbeta(0.975, obs + 1,  n - obs + 1))
 calibracion_gpos
 ```
 
 ```{r}
-ggplot(calibracion_gpos, aes(x = prob_media, y = obs_prop, ymin = inferior,
-                             ymax = superior)) +
+ggplot(calibracion_gpos, 
+  aes(x = prob_media, y = obs_prop, ymin = inferior, ymax = superior)) +
     geom_abline() +
     geom_linerange() +
     geom_point(colour = "red") + coord_equal()
@@ -1109,4 +1105,4 @@ Y con esto verificamos que calibración del modelo es razonable.
 **Observación**: si las probabilidades no están calibradas, y las queremos
 utilizar como tales (con simplemente como *scores*), entonces puede ser
 necesario hacer un paso adicional de calibración, con una muestra
-separada de calibración (ver por ejemplo @Kuhn, sección 11.1).
+separada de calibración (ver por ejemplo @kuhn, sección 11.1).
