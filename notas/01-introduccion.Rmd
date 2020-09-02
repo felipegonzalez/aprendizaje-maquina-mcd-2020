@@ -561,7 +561,7 @@ Una vez que construimos la función $\hat{f}$, podemos hacer predicciones.
 El desempeño del predictor particular $\hat{f}$ se mide como sigue: si
 en el futuro observamos otra muestra ${\mathcal T}$, que llamamos **muestra de prueba**,
 
-$${\mathcal T} = \{(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)})\},$$
+$${\mathcal T} = \{(\mathbf{x}^{(1)}, \mathbf{y}^{(1)}), (\mathbf{x}^{(2)}, \mathbf{y}^{(2)}), \ldots, (\mathbf{x}^{(m)}, \mathbf{y}^{(m)})\},$$
 
 entonces decimos que el **error de predicción** (cuadrático) de $\hat{f}$ para el
 ejemplo $(\mathbf{x^{(j)}},\mathbf{y}^{(j)})$ está dado por
