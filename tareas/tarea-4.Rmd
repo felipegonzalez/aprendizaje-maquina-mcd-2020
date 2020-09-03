@@ -1,0 +1,141 @@
+---
+title: "Tarea 4: probabilidades de clase y clasificación"
+output: html_notebook
+---
+
+En esta tarea estimamos probabilidades de clase usando vecinos más cercanos,
+y evaluamos según la devianza. También consideramos distintos ejemplos
+de clasificadores construidos con probabilidades de clase.
+
+Simulamos datos de entrenamiento con el código de la clase:
+
+## Introducción
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+
+p_1 <- function(x){
+  # probabilidades de clase verdaderas para ejemplo simple de impago
+  ifelse(x < 0.15, 0.95, 0.95 - 0.7 * (x - 0.15))
+}
+simular_impago <- function(n = 500){
+    # simular datos de impago
+    # suponemos que los valores de x están concentrados en valores bajos,
+    # quizá la manera en que los créditos son otorgados
+    x <- pmin(rexp(n, 100 / 40), 1)
+    # las probabilidades de estar al corriente:
+    probs <- p_1(x)
+    # finalmente, simulamos cuáles clientes siguen al corriente y cuales no:
+    g <- ifelse(rbinom(length(x), 1, probs) == 1 , 1, 0)
+    dat_ent <- tibble(x = x, p_1 = probs, g = factor(g))
+    dat_ent
+}
+set.seed(1933)
+dat_ent  <- simular_impago() %>% select(x, g) 
+dat_pr <- simular_impago(n = 2000) %>% select(x, g)
+```
+
+Para un número fijo de vecinos más cercanos, podemos hacer:
+
+```{r}
+vmc_modelo <- nearest_neighbor(neighbors = 5, weight_func = "gaussian") %>% 
+  set_engine("kknn") %>% 
+  set_mode("classification")
+ajuste_vmc <- vmc_modelo %>% fit(g ~ x, dat_ent)
+```
+
+Calcular la devianza de prueba:
+
+```{r}
+predict(ajuste_vmc, dat_pr, type ="prob") %>% # predicciones
+  bind_cols(dat_pr %>% select(g)) %>% # agregamos clase verdadera
+  mn_log_loss(g, .pred_0) %>% # calcular log pérdida
+  mutate(.estimate = .estimate * 2)
+```
+Podemos poner esto en una función. Además agregamos exactitud, que 
+es cuántos casos son clasificados correctamente según el clasificador
+de bayes (ver notas, significa clasificar a la clase con mayor probabilidad
+de clase):
+
+```{r}
+calcular_error_vmc <- function(dat_ent, dat_pr, k = 5){
+  # k es número de vecinos en kvmc
+  vmc_modelo <- nearest_neighbor(neighbors = k, 
+                                 weight_func = "rectangular") %>% 
+  set_engine("kknn") %>% 
+  set_mode("classification")
+  ajuste_vmc <- vmc_modelo %>% fit(g ~ x, dat_ent)
+  error_devianza <- predict(ajuste_vmc, dat_pr, type ="prob") %>% # predicciones
+    bind_cols(dat_pr %>% select(g)) %>% # agregamos clase verdadera
+    mn_log_loss(g, .pred_0) %>% # calcular log pérdida
+    mutate(.estimate = 2 * .estimate)
+ error_devianza %>% 
+   mutate(k = k)
+}
+calcular_error_vmc(dat_ent, dat_pr, 5)
+```
+
+
+
+## Parte 1
+
+Calcula predicciones de clase con estos datos de
+entrenamiento para  20, 30, 50, 75, 100, 150, 200, 400 ,490 vecinos más cercanos.  Evalúa todos los modelos con la muestra de prueba. Grafica número de vecinos
+vs. devianza de prueba:
+
+```{r}
+## rellena aquí tu código, no tienes que usar necesariamente
+## el siguiente código de inicio:
+# errores <- 
+# ggplot(errores, aes(x = k, y = .estimate)) +
+#  geom_line() + geom_point()
+```
+**Pregunta 1**: ¿alrededor de qué valores obtienes los mejores valores de
+devianza?
+
+**Pregunta 2**: ¿Cómo explicas que para muy pocos vecinos el error es grande, y para demasiados vecinos el error también relativamente grande? ¿Qué parte
+de la teoría que hemos visto explica esto?
+
+**Pregunta 3**: ¿Cómo se comporta el modelo con un número grande
+de vecinos? ¿Cómo describirías a los modelos con un número chico de vecinos?
+
+
+## Parte 2  
+
+¿Cómo se vería la tasa de clasificación correcta para cada uno de estos modelos?
+Puedes usar este código:
+
+```{r}
+calcular_error_vmc <- function(dat_ent, dat_pr, k = 5){
+  # k es número de vecinos en kvmc
+  vmc_modelo <- nearest_neighbor(neighbors = k, 
+                                 weight_func = "rectangular") %>% 
+  set_engine("kknn") %>% 
+  set_mode("classification")
+  ajuste_vmc <- vmc_modelo %>% fit(g ~ x, dat_ent)
+  # usamos predicciones de clase, que asigna la clase
+  # según cuál sea la probabilidad de clase más grande.
+  error_exactitud <- predict(ajuste_vmc, dat_pr, type = "class") %>% 
+    bind_cols(dat_pr %>% select(g)) %>% # agregamos clase verdadera
+    accuracy(g, .pred_class) 
+ error_exactitud %>% 
+   mutate(k = k)
+}
+errores <- map(c(20, 30, 50, 75, 100, 150, 200, 400, 490), 
+               ~ calcular_error_vmc(dat_ent, dat_pr, .x)) %>% 
+  bind_rows
+errores
+ggplot(errores, aes(x = k, y = .estimate)) +
+  geom_line() + geom_point()
+```
+
+**Pregunta** (opcional, más difícil): ¿por qué crees que esta última
+se oscila y se ve más ruidosa que la de la devianza? ¿Esta métrica discrimina
+entre los modelos con mayor número de vecinos? 
+¿Crees que eso sea bueno o malo comparado con la devianza?
+
+
+
+
+
