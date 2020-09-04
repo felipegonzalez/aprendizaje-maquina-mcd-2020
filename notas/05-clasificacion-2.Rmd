@@ -7,7 +7,7 @@ cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2"
 theme_set(theme_minimal())
 ```
 
-En problemas de clasificación, queremos usar información del modelo para tomar cierta acción. Ejemplos
+En problemas de clasificación, queremos usar información del modelo para **tomar cierta acción**. Ejemplos
 típicos de que requieren de resolver un problema de clasificación son:
 
 - Dar un tratamiento a una persona para combatir una enfermedad. El tratamiento tienen costos monetarios y efectos secundarios. ¿Cuándo deberíamos tratar o hacer seguimiento de una persona?
@@ -156,7 +156,8 @@ ggplot(perdidas_sim, aes(x = factor(corte), y = - perdida / 1e6)) +
 
 En muchas ocasiones, los costos y las decisiones todavía no están bien definidas,
 y requierimos una manera de evaluar los modelos que sea útil para considerar si 
-el desempeño del modelo es apropiado. En estos casos podemos hacer un análisis de
+el desempeño del modelo es apropiado. 
+En estos casos podemos hacer un análisis de
 error simplificado que ayude a dirigir nuestro trabajo. 
 
 Cuando la variable a predecir es binaria (dos clases), podemos
@@ -204,34 +205,46 @@ de confusión.
 Podemos estudiar a nuestro clasificador en términos de las proporciones de casos que caen en cada celda, que dependen del desempeño del clasificador en cuanto a casos positivos y negativos. La nomenclatura puede ser
 confusa, pues en distintas áreas se usan distintos nombres para estas proporciones:
 
-- Tasa de falsos positivos
+- Tasa de falsos positivos: proporción de veces que nos equivocamos en la
+clasificación para casos negativos.
 $$\frac{fp}{fp+nv}=\frac{fp}{neg}$$
 
-- Tasa de falsos negativos
+- Tasa de falsos negativos: proporción de veces que nos equivocamos en la 
+clasificación para casos positivos.
 $$\frac{fn}{pv+fn}=\frac{fn}{pos}$$
 
-- Especificidad
+- Especificidad: tasa de correctos entre negativos, es el complemento de
+la tasa de falsos positivos.
 $$\frac{vn}{fp+vn}=\frac{vn}{neg}$$
 
-- Sensibilidad o Recall
+- Sensibilidad o Recall o Exhaustividad: 
+tasa de correctos entre positivos, es el complemento
+de la tasa de falsos negativos.
 $$\frac{vp}{vp+fn}=\frac{vp}{pos}$$ 
 
 
-Y también otras que tienen como base las predicciones:
+También existen otras que tienen como base la clasificación en lugar de
+la clase verdadera, y en algunos casos estas ayudan en la interpretación:
 
-- Valor predictivo positivo o Precisión
+- Precisión o valor predictivo positivo: tasa de correctos entre todos los que
+*clasificamos* como positivos
 $$\frac{vp}{vp+fp}=\frac{vp}{pred.pos}$$
 
-- Valor predictivo negativo
+- Valor predictivo negativo: tasa de correctos entre todos los que
+*clasificamos* como negativos
 $$\frac{vn}{fn+vn}=\frac{vn}{pred.neg}$$
 
 
 Dependiendo de el tema y el objetivo hay medidas más naturales que otras:
 
-- En búsqueda y recuperación de documentos o imagenes, o detección de fraude ( donde positivo = el documento es relevante / la transacción es fraudulenta y negativo = el documento no es relevante / transacción normal), se usa más comunmente precisión y recall. Esto es porque nos interesa
-saber: de todos los resultados con predicción positiva, 
-qué porcentaje son relevantes (precisión), y también, 
-de todos los documentos relevantes (positivos), cuáles son recuperados (recall/sensibilidad).
+- En búsqueda y recuperación de documentos o imagenes, o detección de fraude ( donde positivo = el documento es relevante / la transacción es fraudulenta y negativo = el documento no es relevante / transacción normal), se usa más comunmente precisión y exhaustividad.
+La **exhaustividad** (recall o sensibilidad) es muy importante porque mide qué tan
+completa es la lista de resultados que entregamos. Pero para que el sistema
+sea utilizable (efectivo para el usuario), 
+la mayor parte de los resultados entregados deben ser relevantes. Entonces
+es natural usal la **precisión**, que mide, entre todos los resultados 
+con predicción positiva, que presentamos al usuario,
+qué porcentaje realmente son relevantes (precisión).
 
 Un clasificador *preciso* es uno que tal que una fracción alta de sus predicciones positivas son
 positivos verdaderos. Sin embargo, podría no ser muy *sensible*: de todos los positivos que hay, 
@@ -239,21 +252,25 @@ solamente clasifica como positivos a una fracción chica. Conversamente, un clas
 ser muy sensible: captura una fracción alta de los positivos, pero también clasifica como
 positivos a muchos casos que son negativos (*precisión* baja).
 
-- En estadística muchas veces se usa sensibilidad (recall) y especificidad (cuántos negativos descartamos al clasificar como negativos). Por ejemplo, si se tratara
-de una prueba para detectar riesgo de una enfermedad, sensibilidad nos dice qué 
-porcentaje de los casos riesgosos estamos capturando, y especificidad nos dice qué 
-tan bien excluimos a los casos no riesgosos (especificidad).
+- En pruebas para detectar alguna enfermedad, muchas veces se utliza
+sensibilidad (recall o exhaustividad) y especificidad (qué proporción de negativos
+excluimos). **Sensibilidad** nos dice si estamos capturando a la mayoría de los
+verdaderos positivos. La **especificidad** nos dice qué tan bien estamos descartando
+casos que son verdaderos negativos. Si después de la prueba se propone algún tratamiento,
+estas dos cantidades nos dicen qué proporción de "enfermos" vamos a tratar
+y qué proporción de "sanos" vamos a tratar.
+
 
 ```{block2, type='comentario'}
-Cada clasificador tiene un balance distinto precisión y sensibilidad (recall). 
+Cada clasificador tiene un balance distinto precisión y sensibilidad 
+(o sensibilidad y especificidad) . 
 Muchas veces no escogemos clasificadores por la tasa
 de incorrectos solamente, sino que intentamos buscar un balance adecuado entre el comportamiento de clasificación para positivos y para negativos.
 ```
 
 ### Medidas resumen de desempeño {-}
 
-La primera medida resumen que vimos es el error de clasificación, que no toma en
-cuenta el tipo de errores:
+Medidas resumen populares de los errores de un clasificador particular son:
 
 - **Tasa de clasificación incorrecta**
 $$\frac{fn+fv}{neg+pos}$$
@@ -266,8 +283,7 @@ Se usa la la media armónica que penaliza más fuertemente desempeño malo en
 alguna de nuestras dos medidas (precisión y recall) que el promedio armónico.
 
 
-
-#### Ejemplo {-}
+#### Ejemplo (medida F) {-}
 Si precision = 0.01 (muy malo) y recall = 1 (excelente), o recall=0.01 y precisión = 1 (excelente),
 la media usual considera igual de buenos estos dos clasificadores. A su vez, estos
 dos se califican similar a un clasificador con precision = 0.5 y recall = 0.5. 
@@ -281,19 +297,21 @@ media_armonica(c(0.01, 1))
 media_armonica(c(0.5, 0.5))
 ```
 
-- **AUC** (area bajo la curva ROC) que veremos más adelante.
+Nótese que estas medidas **no toman en cuenta las probablidades de clase**, y son
+para un clasificador particular.
 
 
 #### Ejercicio {-}
 Calcular la matriz de confusión (sobre la muestra de prueba) para el
-clasificador logístico de diabetes en términos de imc y edad. Calcula 
+clasificador logístico de diabetes en términos de imc y edad (usando punto de
+corte de 0.5). Calcula 
 adicionalmente con la muestra de prueba sus valores de especificidad y sensibilidad, y precisión y recall. 
 
 ```{r, warnings=FALSE, messages=FALSE}
 diabetes_ent <- as_tibble(MASS::Pima.tr) %>% mutate(type = as.character(type))
 diabetes_pr <- as_tibble(MASS::Pima.te) %>% mutate(type = as.character(type))
 # normalizer
-receta_diabetes <- recipe(type ~ bmi + age, diabetes_ent) %>%
+receta_diabetes <- recipe(type ~ ., diabetes_ent) %>%
   step_mutate(type = factor(type, levels = c("Yes", "No"))) %>% 
   step_normalize(all_predictors()) %>% 
   prep()
@@ -345,8 +363,210 @@ preds_prueba <- preds_prueba %>%
   mutate(clase_pred = ifelse(.pred_Yes > 0.5, "Yes", "No")) %>% 
   mutate(clase_pred = factor(clase_pred, levels = c("Yes", "No")))
 ## calcular con yardstick
+metricas_1 <- metric_set(accuracy, precision, recall)
+preds_prueba %>% 
+  metricas_1(type, estimate = clase_pred)
+```
+También podemos evaluar con
+
+```{r}
+metricas_2 <- metric_set(accuracy, sens, spec)
+preds_prueba %>% 
+  metricas_2(type, estimate = clase_pred)
+```
+
+
+## Análisis de error para probabilidades de clase
+
+Con las métricas interpretables de la sección anterior (sensibilidad, especificidad, etc)
+es posible construir métricas resumen para evaluar probabilidades de clase. La idea
+general es:
+
+```{block2, type="comentario"}
+Si tenemos un modelo que estima probablidades de clase (para un problema binario),
+podemos construir distintos clasificadores (decisiones) usando distintos puntos de corte.
+Para cada $0 < \alpha <1$, tenemos un clasificador $\hat{G}_{\alpha}$ dado por:
+
+- Si $p_1(x) > \alpha$, clasificamos el caso como positivo (1). En otro caso clasificamos
+como negativo.
+- Buscamos resúmenes que incorporen desempeño de *todos* los posibles clasificadores 
+$\hat{G}_{\alpha}$, usando las medidas de arriba de desempeño para clasificadores binarios.
+
+```
+
+Distintos valores de de $\alpha$ dan distintos perfiles  de sensibilidad-especificidad para una misma estimación de las probabilidades condicionales de clase:
+Para minimizar la tasa de incorrectos conviene poner 
+$\alpha= 0.5$. Sin embargo, es común que este no es el único fin de un clasificador bueno (pensar en ejemplo de fraude). 
+
+
+- Cuando incrementamos $\alpha, quiere decir que exigimos estar más seguros de que un caso es positivo para clasificarlo como positivo. Esto quiere decir que la sensibilidad (recall) tiende a ser más chica.
+Por otro lado la precisión tiende a aumentar, pues el porcentaje de verdaderos positivos entre nuestras predicciones positivas será mayor. También la especificidad tiende a ser más grande.
+
+#### Ejemplo {-}
+Por ejemplo, si en el caso de diabetes incrementamos el punto de corte a 0.7:
+
+```{r}
+preds_prueba <- preds_prueba %>% 
+  mutate(clase_pred = ifelse(.pred_Yes > 0.7, "Yes", "No")) %>% 
+  mutate(clase_pred = factor(clase_pred, levels = c("Yes", "No")))
+## calcular con yardstick
 metricas <- metric_set(accuracy, precision, recall)
 preds_prueba %>% 
   metricas(type, estimate = clase_pred)
 ```
+
+La precisión mejora, pero la sensibilidad (recall) se deteriora. Visto desde el punto
+de vista de sensiblidad y especificidad:
+
+```{r}
+preds_prueba %>% 
+  metricas_2(type, estimate = clase_pred)
+```
+
+- Cuando hacemos más chico $\alpha$, entonces exigimos estar más seguros de que un caso es negativo para clasificarlo como negativo. Esto aumenta la sensibilidad, pero la precisión baja.
+Por ejemplo, si en el caso de diabetes ponemos el punto de corte en 0.3:
+
+#### Ejemplo {-}
+
+```{r}
+preds_prueba <- preds_prueba %>% 
+  mutate(clase_pred = ifelse(.pred_Yes > 0.3, "Yes", "No")) %>% 
+  mutate(clase_pred = factor(clase_pred, levels = c("Yes", "No")))
+## calcular con yardstick
+metricas <- metric_set(accuracy, precision, recall)
+preds_prueba %>% 
+  metricas(type, estimate = clase_pred)
+```
+```{r}
+preds_prueba %>% 
+  metricas_2(type, estimate = clase_pred)
+```
+---
+
+Buscamos ahora hacer análisis de este tipo para *todos* los posibles puntos de
+corte. Dos técnicas son curvas ROC y curvas de precisión-exhaustividad, y medidas
+resumen asociadas.
+
+
+## Espacio ROC de clasificadores
+
+
+Podemos visualizar el desempeño de cada uno de estos clasificadores construidos
+con puntos de corte
+mapeándolos a las coordenadas de tasa de falsos positivos
+(1-especificidad) y sensibilidad:
+
+```{r, fig.width = 5, fig.asp =0.9}
+clasif_1 <- tibble(
+  corte = c('0.3','0.5','0.7','perfecto','azar'),
+  tasa_falsos_pos=c(0.24,0.08,0.02,0,0.7),
+  sensibilidad =c(0.66, 0.46,0.19,1,0.7))
+ggplot(clasif_1, aes(x=tasa_falsos_pos, y=sensibilidad,
+  label=corte)) + geom_point() + 
+  geom_abline(intercept=0, slope=1) +
+  xlim(c(0,1)) +ylim(c(0,1)) + geom_text(hjust=-0.3, col='red')+
+  xlab('1-especificidad (tasa falsos pos)')
+
+```
+
+
+
+1. Nótese que agregamos otros dos clasificadores, uno perfecto, que tiene tasa de falsos positivos igual a 0 y sensibilidad igual a 1.
+2. En esta gráfica, un clasificador $G_2$ que está arriba a la izquierda de $G_1$
+domina a $G_1$, pues tiene mejor especificidad y mejor sensibilidad. Entre los clasificadores 0.3, 0.5 y 0.7 de la gráfica, no hay ninguno que domine a otro.
+3. Todos los clasificadores en la diagonal son equivalentes a un clasificador al azar. ¿Por qué? La razón es que si cada vez que vemos un nuevo caso lo clasificamos como positivo con probabilidad $p$ fija y arbitraria. Esto implica que cuando veamos un caso positivo, la probabilidad de ’atinarle’ es de p (sensibilidad), y cuando vemos un negativo, la probabilidad de equivocarnos también es de 1-p (tasa de falsos positivos), por lo que
+la espcificidad es p también. De modo que este clasificador al azar está en la diagonal.
+4. ¿Qué podemos decir acerca de clasificadores que caen por debajo de la diagonal? Estos son clasificadores particularmente malos, pues existen clasificadores con mejor especificidad y/o sensibilidad que son clasificadores al azar! Sin embargo, se puede construir un mejor clasificador volteando las predicciones, lo que cambia sensibilidad por tasa de falsos positivos.
+5. ¿Cuál de los tres clasificadores es el mejor? En términos de la tasa de incorrectos, el de corte 0.5. Sin embargo, para otros propósitos puede ser razonable escoger alguno de los otros.
+
+## Perfil de un clasificador binario y curvas ROC
+
+En lugar de examinar cada punto de corte por separado, podemos hacer el análisis de todos los posibles puntos de corte mediante la curva ROC (receiver operating characteristic, de ingeniería).
+
+
+```{block2, type='comentario'}
+ Para un problema de clasificación binaria, dadas estimaciones $\hat{p}_1(x)$, 
+ la curva ROC grafica todos los pares de (1-especificidad, sensibilidad) para cada posible punto de corte $\hat{p}_1(x) > \alpha$.
+```
+
+ 
+
+
+
+#### Ejemplo {-}
+
+```{r}
+roc_tbl <- roc_curve(preds_prueba, truth = type, estimate = .pred_Yes)
+roc_tbl
+ggplot(roc_tbl, aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path(aes(colour = .threshold), size = 1.2) +
+  geom_abline(colour = "gray") + 
+  coord_equal() +
+  xlab("Tasa de falsos positivos") + ylab("Sensibilidad")
+```
+
+En esta gráfica podemos ver todos los clasificadores posibles basados
+en las probabilidades de clase. Podemos usar estas curvas como evaluación
+de nuestros clasificadores, dejando para más tarde la selección del punto de
+corte, si esto es necesario (por ejemplo, dependiendo de los costos de cada
+tipo de error).
+
+También podemos definir una medida resumen del desempeño de un clasificador según
+esta curva:
+
+```{block2, type='comentario'}
+La medida AUC (area under the curve) para un clasificador es el área 
+bajo la curva generada por los pares sensibilidad-especificidad de la curva ROC.
+```
+
+```{r}
+roc_auc(preds_prueba, type, .pred_Yes)
+```
+Cuanto más cerca de uno es este valor, mejor discriminan las probabilidades.
+
+
+También es útil para comparar modelos. Consideremos el modelo de los datos
+de diabetes que incluyen todas las variables:
+
+```{r}
+mod_2 <- logistic_reg() %>% 
+  set_engine("keras") %>% 
+  set_mode("classification") %>%
+  set_args(epochs = 250, optimizer = optimizer_sgd(lr = 0.2),
+           batch_size = nrow(diabetes_ent), 
+           verbose = FALSE) %>% 
+  fit(type ~ ., juice(receta_diabetes))
+preds_prueba_completo <- predict(mod_2, prueba_baked, type ='prob') %>% 
+  bind_cols(prueba_baked)
+preds_prueba_2 <- bind_rows(preds_prueba %>% mutate(modelo = "IMC y edad"),
+                            preds_prueba_completo %>% mutate(modelo = "Todas")) %>% 
+  group_by(modelo)
+```
+
+
+
+
+Y graficamos juntas:
+
+```{r}
+roc_2_tbl <- roc_curve(preds_prueba_2, type, .pred_Yes)
+ggplot(roc_2_tbl, aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path(aes(colour = modelo), size = 1.2) +
+  geom_abline(colour = "gray") + 
+  coord_equal() +
+  xlab("Tasa de falsos positivos") + ylab("Sensibilidad")
+
+```
+
+Comparación auc:
+
+```{r}
+roc_auc(preds_prueba_2, type, .pred_Yes) 
+```
+
+En este ejemplo, vemos que casi no importa qué 
+perfil de especificidad y sensibilidad busquemos: el clasificador que usa todas las variables
+domina casi siempre al clasificador que sólo utiliza IMC y edad. 
+
+
 
