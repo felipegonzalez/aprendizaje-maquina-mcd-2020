@@ -1057,7 +1057,8 @@ Podemos checar la calibración de nuestro modelo para el ejemplo de diabetes.
 
 ```{r}
 proba_mod <- predict(modelo_diabetes, x_prueba)
-dat_calibracion <- tibble(obs = diabetes_pr %>% pull(type), probabilidad = proba_mod[,1]) %>% 
+dat_calibracion <- tibble(obs = diabetes_pr %>% pull(type), 
+                          probabilidad = proba_mod[,1]) %>% 
     mutate(y = ifelse(obs == "Yes", 1, 0))
 dat_calibracion
 ```
@@ -1073,7 +1074,9 @@ ggplot(dat_calibracion, aes(x = probabilidad, y = y)) +
 
 Y en esta gráfica verificamos que los promedios locales de proporciones de 0-1's son 
 consistentes con las probabilidades que estimamos. Otra manera de hacer esta gráfica
-es cortando las probabilidades en cubetas:
+es cortando las probabilidades en cubetas y calculamos intervalos de credibilidad
+para cada estimación: con esto checamos si el observado es consistente con
+las probabilidades de clase.
 
 ```{r}
 # usamos intervalos suavizados (bayesiano beta-binomial) en lugar de los basados
@@ -1085,9 +1088,9 @@ calibracion_gpos <- dat_calibracion %>%
     summarise(prob_media = mean(probabilidad), 
               n = n(),
               obs = sum(y), .groups = "drop") %>% 
-    mutate(obs_prop = (obs + 1) / (n + 1), 
-           inferior = qbeta(0.025, obs + 1,  n - obs + 1),
-           superior = qbeta(0.975, obs + 1,  n - obs + 1))
+    mutate(obs_prop = (obs + 1) / (n + 2), 
+           inferior = qbeta(0.05, obs + 1,  n - obs + 2),
+           superior = qbeta(0.95, obs + 1,  n - obs + 2))
 calibracion_gpos
 ```
 
@@ -1096,13 +1099,23 @@ ggplot(calibracion_gpos,
   aes(x = prob_media, y = obs_prop, ymin = inferior, ymax = superior)) +
     geom_abline() +
     geom_linerange() +
-    geom_point(colour = "red") + coord_equal()
+    geom_point(colour = "red") + coord_equal() +
+  xlab("Probabilidad de clase") +
+  ylab("Proporción observada") +
+  labs(subtitle = "Intervalos de 90% para prop observada")
 ```
 
 
 Y con esto verificamos que calibración del modelo es razonable.
 
-**Observación**: si las probabilidades no están calibradas, y las queremos
+**Observación**: 
+
+1. Si las probabilidades no están calibradas, y las queremos
 utilizar como tales (con simplemente como *scores*), entonces puede ser
 necesario hacer un paso adicional de calibración, con una muestra
 separada de calibración (ver por ejemplo @kuhn, sección 11.1).
+
+2. En este ejemplo construimos intervalos para las proporciones observadas
+usando intervalos bayesianos. Es posible usar intervalos normales o t (usando el
+error estándar), pero estos intervalos tienen cobertura mala para proporciones
+muy chicas o muy grandes (https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval). Nuestro ejemplo es similar a los intervalos de Agresti-Coull.
