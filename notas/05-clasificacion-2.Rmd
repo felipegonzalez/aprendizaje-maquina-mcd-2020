@@ -320,7 +320,7 @@ library(keras)
 mod_1 <- logistic_reg() %>% 
   set_engine("keras") %>% 
   set_mode("classification") %>%
-  set_args(epochs = 50, optimizer = optimizer_sgd(lr = 0.5),
+  set_args(epochs = 250, optimizer = optimizer_sgd(lr = 0.3),
            batch_size = nrow(diabetes_ent), 
            verbose = FALSE) %>% 
   fit(type ~ bmi + age, juice(receta_diabetes))
@@ -532,7 +532,7 @@ de diabetes que incluyen todas las variables:
 mod_2 <- logistic_reg() %>% 
   set_engine("keras") %>% 
   set_mode("classification") %>%
-  set_args(epochs = 250, optimizer = optimizer_sgd(lr = 0.2),
+  set_args(epochs = 250, optimizer = optimizer_sgd(lr = 0.3),
            batch_size = nrow(diabetes_ent), 
            verbose = FALSE) %>% 
   fit(type ~ ., juice(receta_diabetes))
