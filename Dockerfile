@@ -52,6 +52,6 @@ RUN install2.r --error \
     patchwork
 
 RUN install2.r --error imager gifski 
-RUN r -e 'devtools::install_github("mtennekes/tabplot")'
+#RUN r -e 'devtools::install_github("mtennekes/tabplot")'
 
 RUN install2.r --error kernlab
