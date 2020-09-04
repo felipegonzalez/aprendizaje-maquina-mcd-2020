@@ -569,4 +569,85 @@ perfil de especificidad y sensibilidad busquemos: el clasificador que usa todas 
 domina casi siempre al clasificador que sólo utiliza IMC y edad. 
 
 
+## Curvas de precisión-sensibilidad
 
+Para mostrar los posibles perfiles de clasificación de nuestro modelo, podemos
+mostrar las posibles combinaciones de precisión y recall bajo todos los posibles cortes:
+
+```{r}
+pr_auc_tbl <- pr_curve(preds_prueba_2, type, .pred_Yes)
+ggplot(pr_auc_tbl %>% filter(modelo != "Todas"), 
+       aes(x = recall , y = precision)) +
+  geom_path(aes(colour = .threshold), size = 1.2) +
+  geom_abline(colour = "gray") + 
+  coord_equal() +
+  xlab("Exhaustividad (Sensibilidad)") + ylab("Precisión")
+```
+
+Nota que hay algunas oscilaciones en la curva. Cuando el punto de corte sube,
+la sensibilidad siempre baja o se queda igual (hay la misma cantidad o menos
+de verdaderos positivos). Sin embargo, la precisión se calcula sobre la
+base del número predicciones positivas, y esta cantidad siempre disminuye
+cuando el punto de corte aumenta. Especialmente cuando el número de predicciones
+positivas es chico, esto puede producir oscilaciones como las de la figura.
+
+
+Ahora probamos usando todas las variables  y comparamos
+
+```{r}
+ggplot(pr_auc_tbl , 
+       aes(x = recall , y = precision)) +
+  geom_path(aes(colour = modelo), size = 1.2) +
+  xlab("Exhaustividad (Sensibilidad)") + ylab("Precisión")
+```
+
+
+Y observamos que el modelo con todas las variables tiende a domina al modelo
+de IMC y edad.
+
+**Observaciones**:
+- Precisión y Recall (sensibilidad) son medidas muy naturales para muchos problemas,
+en particular aquellos donde la clase de positivos es relativamente chica.
+- Sin embargo, en puntos de corte altos las estimaciones de precisión son ruidosas cuando
+nuestro conjunto de prueba es relativamente chico y no existen muchos casos con
+probabilidades altas (el denominador de precisión es el número de clasificados como
+positivos)
+- Una alternativa es usar curvas ROC
+
+## Curvas acumuladas de ganancia y lift
+
+Otro enfoque común y útil es graficar en el eje horizontal el porcentaje
+de casos que cada clasificador clasifica como positivos para cada punto
+de corte- en términos de
+la decisión que nos interesa, esto usualmente indica qué porcentaje de
+los casos esperamos intervenir o probar (por ejemplo, el porcentaje que recibe una
+campaña publicitaria, o que califica para algún programa especial). En el eje
+vertical ponemos la sensibilidad, que es qué porcentaje de todos los
+positivos esperamos encontrar:
+
+```{r}
+gain_tbl <- gain_curve(preds_prueba_2, type, .pred_Yes)
+ggplot(gain_tbl, 
+       aes(x = .percent_tested , y = .percent_found)) +
+  geom_path(aes(colour = modelo), size = 1.2) +
+  geom_abline(colour = "gray") + 
+  coord_equal() +
+  xlab("% Clasificado positivo") + ylab("Precisión")
+```
+
+Y un análogo para las curvas de precisión-recall es la curva del lift. En el
+eje vertical graficamos la precisión entre lel % de clasificados como positivos:
+
+
+```{r}
+lift_tbl <- lift_curve(preds_prueba_2, type, .pred_Yes)
+ggplot(lift_tbl, 
+       aes(x = .percent_tested , y = .lift)) +
+  geom_path(aes(colour = modelo), size = 1.2) +
+  xlab("% Clasificado positivo") + ylab("Lift")
+```
+
+Cuando el lift es más grande que uno, quiere decir que el modelo es superior
+en encontra positivos que una estrategia de tomar casos al azar. Por las mismas
+razones que las curvas de precisión-exhaustividad, la gráfica puede ser ruidosa
+para puntos de corte altos.
