@@ -1,3 +1,6 @@
 _book/
 node_modules/
 package-lock*
+
+# Local Netlify folder
+.netlify
