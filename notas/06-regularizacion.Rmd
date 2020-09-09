@@ -68,8 +68,8 @@ Generamos las betas:
 ```{r}
 h <- function(x){ 1 / (1 + exp(-x))}
 set.seed(2805)
-beta <- rnorm(100,0,0.1)
-names(beta) <- paste0('V', 1:length(beta))
+beta_vec <- rnorm(100,0,0.1)
+beta <- tibble(term = paste0('V', 1:length(beta_vec)), valor = beta_vec)
 head(beta)
 ```
 
@@ -78,10 +78,11 @@ de prueba (5000).
 
 ```{r, message=FALSE}
 sim_datos <- function(n, beta){
-  p <- length(beta)
+  p <- nrow(beta)
   mat_x <- matrix(rnorm(n * p, 0, 0.5), n, p) + rnorm(n) 
-  colnames(mat_x) <- names(beta)
-  prob <- h(mat_x %*% beta) 
+  colnames(mat_x) <- beta %>% pull(term)
+  beta_vec <- beta %>% pull(valor)
+  prob <- h(mat_x %*% beta_vec) 
   y <- rbinom(n, 1, prob)
   datos <- as_tibble(mat_x) %>% 
     mutate(y = factor(y, levels = c(1, 0)), prob = prob) 
@@ -111,11 +112,14 @@ mod_1  <- fit(flujo, dat_ent) %>% pull_workflow_fit()
 ¿Qué tan buenas fueron nuestras estimaciones de los coeficientes verdaderos?
 
 ```{r}
-coefs_1 <- mod_1$fit %>% coef
-qplot(c(0, beta), coefs_1) + 
+coefs_1 <- tidy(mod_1) %>% 
+  left_join(beta)
+ggplot(coefs_1 %>% filter(term != "(Intercept)"), 
+       aes(x = valor, y = estimate)) +
+  geom_point() +
   xlab('Coeficientes') + 
   ylab('Coeficientes estimados') +
-  geom_abline(intercept=0, slope =1) +
+  geom_abline() +
   xlim(c(-1.5,1.5))+ ylim(c(-1.5,1.5))
 ```
 
@@ -128,8 +132,8 @@ varianza alta.
 ```{r, message = FALSE}
 datos_ent_2 <- sim_datos(n = 400, beta = beta)
 mod_2 <- fit(flujo, datos_ent_2) %>% pull_workflow_fit()
-coefs_2 <- coef(mod_2$fit)
-qplot(coefs_1, coefs_2) + xlab('Coeficientes mod 1') + 
+coefs_2 <- tidy(mod_2)
+qplot(coefs_1$estimate, coefs_2$estimate) + xlab('Coeficientes mod 1') + 
   ylab('Coeficientes mod 2') +
   geom_abline(intercept=0, slope =1) +
   xlim(c(-1.5,1.5))+ ylim(c(-1.5,1.5))
@@ -141,7 +145,7 @@ Si repetimos varias veces:
 dat_sim <- map(1:50, function(i){
   datos_ent <- sim_datos(n = 400, beta = beta)
   mod <- fit(flujo, datos_ent) %>% pull_workflow_fit()
-  tibble(rep = i, coefs = coef(mod$fit)) %>% mutate(vars = names(coefs))
+  tidy(mod) %>% mutate(rep = i)
 }) %>% bind_rows
 head(dat_sim)
 ```
@@ -151,9 +155,8 @@ Vemos que hay mucha variabilidad en la estimación de los coeficientes
  (en rojo están los verdaderos):
 
 ```{r}
-ggplot(dat_sim, aes(x = vars, y = coefs)) + geom_boxplot() +
-  geom_line(data = tibble(coefs = beta, vars = names(beta)), 
-    aes(y = beta, group=1), col='red', size=1.1) + coord_flip()
+ggplot(dat_sim, aes(x = term, y = estimate)) + geom_boxplot() +
+  geom_line(data = beta, aes(y = valor), group = 1, colour = "red") + coord_flip()
 ```
 
 En la práctica, nosotros tenemos una sola muestra de entrenamiento.
@@ -193,12 +196,13 @@ una degradación grande de desempeño de entrenamiento a prueba (*brecha* grande
 ```{r}
 roc_entrena <- p_entrena %>% 
   roc_curve(y, .pred_1) %>% 
-  mutate(tipo = "entrena")
+  mutate(muestra = "entrena")
 roc_prueba <- p_prueba %>% 
   roc_curve(y, .pred_1) %>% 
-  mutate(tipo = "prueba")
-roc_curvas <- bind_rows(roc_entrena, roc_prueba)
-ggplot(roc_curvas, aes(x = 1 - specificity, y = sensitivity, colour = tipo)) +
+  mutate(muestra = "prueba")
+roc_curvas <- bind_rows(roc_entrena, roc_prueba) %>% 
+  mutate(tipo = "Sin regularización")
+ggplot(roc_curvas, aes(x = 1 - specificity, y = sensitivity, colour = muestra)) +
   geom_path() +
   geom_abline()
 ```
@@ -227,3 +231,178 @@ el sobreajuste asociado a la variabilidad de los coeficientes
 que notamos arriba.
 
 
+
+### Reduciendo varianza de los coeficientes
+
+Como el problema es la variabilidad de los coeficientes (no hay sesgo
+pues conocemos el modelo verdadero), podemos atacar este problema
+poniendo restricciones a los coeficientes, de manera que caigan en rangos 
+más aceptables.  Una manera de hacer esto es sustituir el problema de minimización
+de regresión logística, que es minimizar la devianza:
+
+$$\min_{\beta} D(\beta)$$
+
+con un problema penalizado
+
+$$\min_{\beta} D(\beta) + \lambda\sum_{i=1}^p \beta_j^2$$
+
+escogiendo un valor apropiado de $\lambda$.  
+
+Si escogemos un valor
+relativamente grande de $\lambda$, entonces terminaremos con una solución
+donde los coeficientes $\beta_j$ no pueden alejarse mucho de 0, 
+y esto previene parte del sobreajuste que observamos en nuestro primer ajuste. Otra manera de decir esto es: intentamos minimizar la devianza, pero no permitimos que los coeficientes se alejen demasiado de cero.
+
+También es posible poner restricciones
+sobre el tamaño de $\sum_{i=1}^p \beta_j^2$, lo cual es equivalente al problema
+de penalización.
+
+En este caso obtenemos (veremos más del paquete *glmnet*):
+
+```{r}
+modelo_reg <-  logistic_reg(mixture = 0, penalty = 0.1) %>% 
+  set_engine("glmnet") 
+flujo_reg <- workflow() %>% 
+  add_model(modelo_reg) %>% 
+  add_recipe(receta)
+flujo_reg <- fit(flujo_reg, dat_ent)
+mod_reg  <- flujo_reg %>% pull_workflow_fit()
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+coefs_penalizado <- tidy(mod_reg)
+coefs_penalizado
+```
+
+Y podemos ver que el tamaño de los coeficientes se redujo considerablemente:
+
+```{r}
+sum(coefs_penalizado$estimate^2)
+sum(coefs_1$estimate^2)
+```
+
+Los nuevos coeficientes estimados tienen menor variación:
+```{r}
+qplot(coefs_1$estimate, coefs_penalizado$estimate) + 
+  xlab('Coeficientes') + 
+  ylab('Coeficientes estimados') +
+  geom_abline()
+```
+
+Y las probabilidades estimadas son más cercanas a las reales:
+
+```{r}
+p_entrena_reg <- predict(flujo_reg, dat_ent, type = "prob") %>% 
+  bind_cols(dat_ent %>% select(prob, y))
+ggplot(p_entrena_reg, aes(x=prob, y = .pred_1, colour = y)) + 
+    geom_point() 
+```
+
+El desempeño es considerablemente mejor:
+
+```{r}
+roc_entrena_reg <- predict(flujo_reg, dat_ent, type = "prob") %>% 
+  bind_cols(dat_ent %>% select(prob, y)) %>%
+  roc_curve(y, .pred_1) %>% 
+  mutate(muestra = "entrena") %>% 
+  mutate(tipo = "Regularizado")
+
+roc_curvas_reg <- predict(flujo_reg, dat_pr, type = "prob") %>% 
+  bind_cols(dat_pr %>% select(prob, y)) %>%
+  roc_curve(y, .pred_1) %>% 
+  mutate(muestra = "prueba") %>% 
+  mutate(tipo = "Regularizado") %>% 
+  bind_rows(roc_curvas, roc_entrena_reg)
+
+roc_prueba_curvas <- roc_curvas_reg %>% filter(muestra == "prueba") 
+ggplot(roc_prueba_curvas, 
+       aes(x = 1 - specificity, y = sensitivity, colour = tipo)) +
+  geom_path() +
+  geom_abline() +
+  labs(subtitle = "Evaluación en muestra de prueba")
+```
+
+
+**Observación**: Sin embargo, vemos que en la muestra de entrenamiento se desempeña mejor
+el modelo sin penalización, como es de esperarse (el mínimo irrestricto es
+más bajo que el mínimo del problema con restricción):
+
+```{r}
+ggplot(roc_curvas_reg, 
+       aes(x = 1 - specificity, y = sensitivity, colour = tipo)) +
+  facet_wrap(~muestra) +
+  geom_path() +
+  geom_abline()
+```
+
+
+
+## Regularización ridge
+
+Arriba vimos un ejemplo de regresión penalizada tipo **ridge**. Recordemos
+que para regresión lineal, buscábamos minimizar la cantidad
+$$D(\beta)=\frac{1}{n}\sum_{i=1}^n (y_i -\beta_0 - \sum_{j=1}^p \beta_j x_{ij})^2$$
+y en regresión logística,
+$$D(\beta)=-\frac{2}{n}\sum_{i=1}^n y_i \log(h(\beta_0 + \sum_{j=1}^p \beta_j x_{ij})) + (1-y_i) \log(1 - h(\beta_0 + \sum_{j=1}^p \beta_j x_{ij}))    ,$$
+donde los denotamos de la misma forma para unificar notación.
+
+```{block2, type='comentario'}
+En regresión **ridge** (lineal/logística), para $\lambda>0$ fija minimizamos
+$$D_{\lambda}^{ridge} (\beta)=D(\beta)  + \lambda\sum_{i=1}^p \beta_j^2,$$
+donde suponemos que las entradas están estandarizadas (centradas y escaladas por
+la desviación estándar).
+```
+
+#### Observaciones {-}
+
+
+- La idea de regresión penalizada consiste en estabilizar la estimación de los
+coeficientes, especialmente en casos donde tenemos muchas variables en relación
+a los casos de entrenamiento. La penalización no permite que varíen tan fuertemente
+los coeficientes.
+- Cuando $\lambda$ es mas grande, los coeficientes se encogen más fuertemente
+hacia cero con respecto al problema no regularizado. En este caso, estamos
+**reduciendo la varianza** pero potencialmente **incrementando el sesgo**.
+- Cuando $\lambda$ es mas chico, los coeficientes se encogen menos fuertemente
+hacia cero, y quedan más cercanos a los coeficientes de mínimos cuadrados/máxima verosimilitud. 
+En este caso, estamos
+**reduciendo el sesgo** pero **incrementando la varianza**.
+- Nótese que no penalizamos $\beta_0$. Es posible hacerlo, pero típicamente
+no lo hacemos. En regresión lineal, de esta forma garantizamos que 
+la predicción $\hat{y}$, cuando todas las variables $x_j$ toman su valor
+en la media, es el promedio de las $y_i$'s de entrenamiento. Igualmente en 
+regresión logística, la probabilidad ajustada cuando las entradas toman su
+valor en la media es igual a $h(\beta_0)$.
+- Que las variables estén estandarizadas es importante para que tenga
+sentido la penalización. Si las variables $x_j$ están en distintas escalas (por ejemplo
+pesos y dólares), entonces también los coeficientes $\beta_j$ están en distintas escalas,
+y una penalización fija no afecta de la misma forma a cada coeficiente.
+
+
+Resolver este problema penalizado por descenso en gradiente no tienen dificultad, pues:
+
+```{block2, type='comentario'}
+$$\frac{\partial D_{\lambda}^{ridge} (\beta)}{\partial\beta_j} = \frac{\partial D(\beta)}{\beta_j} + 2\lambda\beta_j$$
+para $j=1,\ldots, p$, y 
+$$\frac{\partial D_{\lambda}^{ridge} (\beta)}{\partial\beta_0} = \frac{\partial D(\beta)}{\beta_0}.$$
+```
+
+De forma que sólo hay que hacer una modificación  mínima al algoritmo de descenso en gradiente
+para el caso no regularizado.
+
+### Selección de coeficiente de regularización
+
+Seleccionamos $\lambda$ para minimizar el error de predicción,
+es decir, para mejorar nuestro modelo ajustado en cuanto a sus 
+predicciones.
+
+- No tiene sentido intentar escoger $\lambda>0$ usando el error
+de entrenamiento. La razón es que siempre que aumentamos $\lambda$, obtenemos
+un valor mayor de la suma de cuadrados / devianza del modelo, pues $\lambda$ más
+grande implica que pesa menos la minimización de la suma de cuadrados /devianza
+en el problema de la minimización. En otras palabras, los coeficientes tienen
+una penalización más fuerte, de modo que el mínimo que se alcanza es mayor
+en términos de devianza.
+- Intentamos escoger $\lambda$ de forma que se minimice el error de predicción,
+o el error de prueba (que estima el error de predicción).
