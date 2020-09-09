@@ -1,0 +1,229 @@
+# Regularizacion
+
+
+```{r, include = FALSE}
+library(tidyverse)
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+theme_set(theme_minimal())
+```
+
+Los métodos para ajustar modelos lineales que vimos en secciones anteriores
+(mínimos cuadrados y minimización de devianza) tienen la vulnerabilidad de
+que no tienen mecanismos para evitar sobreajustar los datos: queremos minimizar
+la devianza de prueba (o de datos futuros),  e intentamos lograr eso
+minimizando la devianza de entrenamiento. 
+
+En esta parte veremos una de las técnicas más comunes y poderosas para
+evitar ese sobreajuste: la *regularización*. Consiste en cambiar la función
+objetivo que queremos minimizar por otra que penaliza modelos demasiado complejos
+o inverosímiles. 
+
+Así por ejemplo, en un problema de regresión, en lugar de obtener
+nuestro estimadores resolviendo
+$$\hat{\beta} = {\textrm{argmin}}_\beta D(\beta)m$$
+donde $D(\beta)$ es la devianza de *entrenamiento*,buscamos minimizar una función objetivo modificada
+
+$$\hat{\beta} = {\textrm{argmin}}_\beta \{D(\beta) + \Omega(\beta)\}$$
+donde $\Omega(\beta)$ puede ser grande algunas configuraciones de los 
+parámetros que son "poco verosímiles". Este cambio evita que el proceso
+de minimización sobrajuste los datos haciendo $D(\beta)$ demasiado chico.
+
+
+### Sesgo y varianza en modelos lineales
+
+Aunque típicamente pensamos que los modelos lineales son métodos simples, con
+estructura rígida, y que tienden a sufrir más por sesgo que por varianza (parte de 
+la razón por la que existen métodos más flexibles como bosques aleatorios, redes
+nueronales, etc.), hay varias razones por las que los métodos lineales pueden sufrir
+de varianza alta:
+
+- Cuando la muestra de entrenamiento es relativamente chica ($n$ chica), la varianza
+puede ser alta.
+
+- Cuando el número de entradas  $p$ es grande, podemos también sufrir de varianza grande
+(pues tenemos muchos parámetros para estimar).
+
+- Cuando hay variables correlacionadas en las entradas la varianza también puede ser alta.
+
+En estos casos, conviene buscar maneras de reducir varianza, generalmente a costa
+de un incremento de sesgo.
+
+#### Ejemplo {-}
+
+
+Consideramos regresión logística. En primer lugar, supondremos que 
+tenemos un problema con $n=400$ y $p=100$, y tomamos como modelo para los datos (sin 
+ordenada al origen):
+
+$$p_1(x)=h\left(\sum_{j=1}^{100} \beta_j x_j\right ),$$
+
+
+donde $h$ es la función logística. 
+Nótese que este es el *verdadero modelo para los datos*. Para producir datos
+de entrenamiento, primero generamos las betas fijas, y después, utilizando estas betas,
+generamos 400 casos de entrenamiento.
+
+Generamos las betas:
+
+```{r}
+h <- function(x){ 1 / (1 + exp(-x))}
+set.seed(2805)
+beta <- rnorm(100,0,0.1)
+names(beta) <- paste0('V', 1:length(beta))
+head(beta)
+```
+
+Con esta función simulamos datos de entrenamiento (400) y datos
+de prueba (5000).
+
+```{r, message=FALSE}
+sim_datos <- function(n, beta){
+  p <- length(beta)
+  mat_x <- matrix(rnorm(n * p, 0, 0.5), n, p) + rnorm(n) 
+  colnames(mat_x) <- names(beta)
+  prob <- h(mat_x %*% beta) 
+  y <- rbinom(n, 1, prob)
+  datos <- as_tibble(mat_x) %>% 
+    mutate(y = factor(y, levels = c(1, 0)), prob = prob) 
+  datos
+}
+set.seed(9921)
+datos <- sim_datos(n = 4000, beta = beta)
+```
+
+
+Y ahora separamos entrenamiento y prueba,
+y ajustamos el modelo de regresión logística:
+
+```{r}
+library(tidymodels)
+separacion <- initial_split(datos, 0.10)
+dat_ent <- training(separacion)
+modelo <-  logistic_reg() %>% set_engine("glm")
+receta <- recipe(y ~ ., dat_ent) %>% 
+  update_role(prob, new_role = "otras")
+flujo <- workflow() %>% 
+  add_model(modelo) %>% 
+  add_recipe(receta)
+mod_1  <- fit(flujo, dat_ent) %>% pull_workflow_fit()
+```
+
+¿Qué tan buenas fueron nuestras estimaciones de los coeficientes verdaderos?
+
+```{r}
+coefs_1 <- mod_1$fit %>% coef
+qplot(c(0, beta), coefs_1) + 
+  xlab('Coeficientes') + 
+  ylab('Coeficientes estimados') +
+  geom_abline(intercept=0, slope =1) +
+  xlim(c(-1.5,1.5))+ ylim(c(-1.5,1.5))
+```
+
+Y notamos que las estimaciones no son buenas.
+Podemos hacer otra simulación para confirmar que el problema
+es que las estimaciones son muy variables.
+
+Con otra muestra de entrenamiento, vemos que las estimaciones tienen
+varianza alta.
+```{r, message = FALSE}
+datos_ent_2 <- sim_datos(n = 400, beta = beta)
+mod_2 <- fit(flujo, datos_ent_2) %>% pull_workflow_fit()
+coefs_2 <- coef(mod_2$fit)
+qplot(coefs_1, coefs_2) + xlab('Coeficientes mod 1') + 
+  ylab('Coeficientes mod 2') +
+  geom_abline(intercept=0, slope =1) +
+  xlim(c(-1.5,1.5))+ ylim(c(-1.5,1.5))
+```
+
+Si repetimos varias veces:
+
+```{r}
+dat_sim <- map(1:50, function(i){
+  datos_ent <- sim_datos(n = 400, beta = beta)
+  mod <- fit(flujo, datos_ent) %>% pull_workflow_fit()
+  tibble(rep = i, coefs = coef(mod$fit)) %>% mutate(vars = names(coefs))
+}) %>% bind_rows
+head(dat_sim)
+```
+
+
+Vemos que hay mucha variabilidad en la estimación de los coeficientes
+ (en rojo están los verdaderos):
+
+```{r}
+ggplot(dat_sim, aes(x = vars, y = coefs)) + geom_boxplot() +
+  geom_line(data = tibble(coefs = beta, vars = names(beta)), 
+    aes(y = beta, group=1), col='red', size=1.1) + coord_flip()
+```
+
+En la práctica, nosotros tenemos una sola muestra de entrenamiento.
+Así que, con una muestra de tamaño $n=400$ como en este ejemplo,
+obtendremos típicamente resultados no muy buenos. **Estos
+coeficientes ruidosos afectan nuestras predicciones de manera negativa**.
+
+Vemos ahora lo que pasa con nuestra $\hat{p}_1(x)$ estimadas, comparándolas
+con $p_1(x)$, para la primera simulación:
+
+```{r}
+dat_pr <- testing(separacion)
+p_entrena <- predict(mod_1, dat_ent, type = "prob") %>% 
+  bind_cols(dat_ent %>% select(prob, y))
+p_prueba <- predict(mod_1, dat_pr, type = "prob") %>% 
+  bind_cols(dat_pr %>% select(prob, y))
+```
+Para los datos de entrenamiento:
+```{r}
+ggplot(p_entrena, aes(x = .pred_1, y = prob, colour = y)) + 
+  geom_point() + coord_flip() +
+  xlab("Verdadera probabilidad") + ylab("Prob ajustada")
+```
+
+Notamos en esta gráfica:
+
+- El ajuste parece discriminar razonablemente bien entre las dos clases del
+conjunto de entrenamiento
+(cuando la probabilidad estimada es chica, observamos casi todos clase 0,
+y cuando la probabilidad estimada es grande, observamos casi todos clase 1).
+- Sin embargo, vemos que las probabilidades estimadas tienden a ser extremas: muchas veces estimamos probabilidad cercana a 0 o 1, cuando la probabilidad real no es tan extrema (por ejemplo, está entre 0.25 y 0.75).
+
+Estos dos aspectos indican sobreajuste. Podemos verificar comparando
+con los resultados que obtenemos con la muestra de prueba, donde notamos
+una degradación grande de desempeño de entrenamiento a prueba (*brecha* grande):
+
+```{r}
+roc_entrena <- p_entrena %>% 
+  roc_curve(y, .pred_1) %>% 
+  mutate(tipo = "entrena")
+roc_prueba <- p_prueba %>% 
+  roc_curve(y, .pred_1) %>% 
+  mutate(tipo = "prueba")
+roc_curvas <- bind_rows(roc_entrena, roc_prueba)
+ggplot(roc_curvas, aes(x = 1 - specificity, y = sensitivity, colour = tipo)) +
+  geom_path() +
+  geom_abline()
+```
+
+
+Finalmente, podemos también repetir la
+gráfica de arriba con los datos de prueba:
+
+
+```{r}
+ggplot(p_prueba, aes(x=.pred_1)) + 
+    geom_point(aes(y=prob, colour=y)) + coord_flip()
+```
+
+Si la estimación fuera perfecta, 
+esta gráfica sería una diagonal. Vemos entonces
+que 
+
+- Cometemos errores grandes en la estimación de probabilidades. 
+- El desempeño predictivo del modelo es pobre, aún cuando nuestro modelo
+puede discriminar razonablemente bien las dos clases en el conjunto de entrenamiento.
+
+El problema no es que nuestro modelo no sea apropiado
+(logístico), pues ese es el modelo verdadero. El problema es 
+el sobreajuste asociado a la variabilidad de los coeficientes
+que notamos arriba.
+
+
