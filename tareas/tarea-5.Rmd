@@ -1,0 +1,100 @@
+---
+title: 'Tarea 5: regresión logística y descenso en gradiente'
+output: html_notebook
+---
+
+En esta parte calculamos el gradiente para regresión logística. Entender los
+básicos de este cálculo es importante, pues, por ejemplo, es la base del algoritmo
+de propagación hacia atrás para redes neuronales.
+
+Sea $h(z) = \frac{e^z}{1 + e^z}$ la función sigmoidal. Consideramos un 
+problema con dos entradas numéricas $x_1, x_2$, y
+la respuesta $y$ toma los valores 0 o 1. En regresión logística,
+la probabilidad de  $y=1$ está dada por
+
+$$p_\beta (x_1, x_2) = h(\beta_0 + \beta_1 x_1 + \beta_2 x_2)$$
+La devianza para un caso de entrenamiento $(x_1, x_2, y)$ está dada por (omitimos
+por el momento el factor de 2):
+
+$$D(\beta_0, \beta_1, \beta_2) = -y\log p_\beta (x_1, x_2) - (1-y)\log(1-p_\beta (x_1, x_2))$$
+
+Queremos calcular las derivadas parciales de la devianza con
+respecto a los parámetros. Escribiremos
+
+$$p_\beta = p_\beta (x_1, x_2)$$ 
+
+para simplificar la notación.
+
+**Pregunta 1**: muestra que
+
+$$\frac{\partial D}{\beta_1} = \left (- \frac{y}{p_\beta}+\frac{1-y}{1-p_\beta} \right) \frac{\partial p_\beta}{\beta_1}$$ 
+
+**Pregunta 2**: simplifica el primer factor y muestra que es igual a
+$$\frac{p_\beta -y}{p_\beta(1-p_\beta)}$$
+**Pregunta 3**: calculamos ahora el segundo factor $\frac{\partial p_\beta}{\beta_1}$.
+Como $p_\beta = h(\beta_0 + \beta_1 x_1 + \beta_2 x_2)$, muestra que
+
+$$\frac{\partial p_\beta}{\beta_1} = h'(\beta_0 + \beta_1 x_1 + \beta_2 x_2) x_1$$
+
+**Pregunta 3**: muestra que
+$$h'(z) = \frac{1}{(1+e^z)^2}$$
+Usando la ecuación de arriba, muestra ahora que
+$$h'(z) = h(z)(1 - h(z))$$
+**Pregunta 4**: Evalúa ahora la forma de $h'(z)$ que obtuviste en la pregunta
+anterior para mostrar que
+$$h'(\beta_o + \beta_1 x_1 + \beta_2 x_2) = p_\beta (1-p_\beta)$$
+**Pregunta 5**: junta tu respuesta de 2 y 4 para mostrar que
+
+$$\frac{\partial D}{\beta_1} = (p_\beta - y ) x_1$$
+**Pregunta 5**: para hacer descenso en gradiente, tenemos que multiplicar este gradiente
+por menos:
+
+$$- \frac{\partial D}{\beta_1} = (y - p_\beta ) x_1$$
+Supón que $y = 1$ y $x_1>0$. Cuando hacemos un paso de descenso en gradiente, **considerando
+solamente este punto de entrenamiento**,
+¿hacia donde se mueve $\beta_1$? ¿Que pasa entonces $p_\beta$ cuando hacemos un paso
+de gradiente, crece o decrece? ¿Tiene sentido esto para hacer más chica la devianza de este
+caso de entrenamiento?
+
+**Pregunta 6**: Escribe las parciales de la pregunta anterior para los parámetros $\beta_0$
+y $\beta_1$.
+
+**Pregunta 7**: Si tienes varios datos de entrenamiento, ¿cómo se ven las parciales
+de la devianza?  Explica por qué este 
+algoritmo es correcto:
+
+Para calcular la dirección de descenso en descenso en gradiente,
+supongamos que los parámetros actuales de descenso en gradiente son $\beta_0, \beta_1, \beta_2$:
+
+1. Para $i=1,2, \ldots, n$ casos de entrenamiento, ponemos $\Delta = 0$
+2. En el paso $i$, tomamos el $i$-ésimo caso de entrenamiento $(x_1^{(i)}, x_2^{(i)}, y^{(i)})$
+3. Calculamos la probabilidad $p_\beta(x_1^{(i)}, x_2^{(i)})$ mediante
+$$p_\beta(x_1^{(i)}, x_2^{(i)}) = h(\beta_0 + \beta_1 x_1^{(i)} + \beta_2 x_2^{(i)})$$
+donde $\beta_0, \beta_1, \beta_2$ son los valores actuales de las betas.
+4. Calculamos la cantidad 
+$$e^{(i)} = y^{(i)} - p_\beta(x_1^{(i)}, x_2^{(i)}),$$
+y luego el vector
+$$\delta^{(i)} = (e^{(i)}, e^{(i)}x_1^{(i)}, e^{(i)}x_2^{(i)}). $$ 
+5. Acumulamos en $\Delta$:
+$$\Delta = \Delta + \frac{2}{n}\delta^{(i)}.$$ 
+
+
+
+Después de recorrer todo el conjunto de entrenamiento, el vector $\Delta$ contiene
+la dirección de descenso.
+
+Finalmente, hacemos un paso de descenso: para un tamaño de paso $\eta>0$, actualizamos
+el vector de parámetros con:
+$$\beta_{nuevo} = \beta + \eta\Delta$$
+**Pregunta 8**: Si el conjunto de datos de entrenamiento es muy grande, ¿cómo se podría
+paralelizar el cálculo de la dirección de descenso en el algoritmo anterior?
+
+**Pregunta 9**: ¿Qué crees que pasaría en el algoritmo anterior si en lugar de acumular
+sobre todo el conjunto de entrenamiento solo acumuláramos sobre una muestra aleatoria? Explica
+por qué crees que esta idea podría o no funcionar para ahorrar cálculo y encontrar 
+una solución cercana al mínimo.
+
+
+
+
+
