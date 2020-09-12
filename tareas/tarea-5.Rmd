@@ -37,7 +37,7 @@ Como $p_\beta = h(\beta_0 + \beta_1 x_1 + \beta_2 x_2)$, muestra que
 $$\frac{\partial p_\beta}{\beta_1} = h'(\beta_0 + \beta_1 x_1 + \beta_2 x_2) x_1$$
 
 **Pregunta 3**: muestra que
-$$h'(z) = \frac{1}{(1+e^z)^2}$$
+$$h'(z) = \frac{e^z}{(1+e^z)^2}$$
 Usando la ecuación de arriba, muestra ahora que
 $$h'(z) = h(z)(1 - h(z))$$
 **Pregunta 4**: Evalúa ahora la forma de $h'(z)$ que obtuviste en la pregunta
