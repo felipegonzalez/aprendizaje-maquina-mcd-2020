@@ -177,8 +177,8 @@ p_prueba <- predict(mod_1, dat_pr, type = "prob") %>%
 Para los datos de entrenamiento:
 ```{r}
 ggplot(p_entrena, aes(x = .pred_1, y = prob, colour = y)) + 
-  geom_point() + coord_flip() +
-  xlab("Verdadera probabilidad") + ylab("Prob ajustada")
+  geom_point() + 
+  xlab("Predicción") + ylab("Probabilidad verdadera")
 ```
 
 Notamos en esta gráfica:
@@ -214,7 +214,8 @@ gráfica de arriba con los datos de prueba:
 
 ```{r}
 ggplot(p_prueba, aes(x=.pred_1)) + 
-    geom_point(aes(y=prob, colour=y)) + coord_flip()
+    geom_point(aes(y=prob, colour=y)) + 
+  xlab("Predicción") + ylab("Probabilidad verdadera")
 ```
 
 Si la estimación fuera perfecta, 
@@ -290,18 +291,19 @@ qplot(coefs_1$estimate, coefs_penalizado$estimate) +
   geom_abline()
 ```
 
-Y las probabilidades estimadas son más cercanas a las reales:
+Y las probabilidades estimadas son más cercanas a las reales (recuerda
+que las probabilidades reales no las observamos, sólo observamos la clase):
 
 ```{r}
 p_entrena_reg <- predict(flujo_reg, dat_ent, type = "prob") %>% 
   bind_cols(dat_ent %>% select(prob, y))
-ggplot(p_entrena_reg, aes(x=prob, y = .pred_1, colour = y)) + 
+ggplot(p_entrena_reg, aes(x = .pred_1, y = prob, colour = y)) + 
     geom_point() 
 ```
 
 El desempeño es considerablemente mejor:
 
-```{r}
+```{r, fig.width = 6, fig.height = 3.5}
 roc_entrena_reg <- predict(flujo_reg, dat_ent, type = "prob") %>% 
   bind_cols(dat_ent %>% select(prob, y)) %>%
   roc_curve(y, .pred_1) %>% 
@@ -328,7 +330,7 @@ ggplot(roc_prueba_curvas,
 el modelo sin penalización, como es de esperarse (el mínimo irrestricto es
 más bajo que el mínimo del problema con restricción):
 
-```{r}
+```{r, fig.width = 8, fig.height = 3.5}
 ggplot(roc_curvas_reg, 
        aes(x = 1 - specificity, y = sensitivity, colour = tipo)) +
   facet_wrap(~muestra) +
