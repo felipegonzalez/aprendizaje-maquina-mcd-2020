@@ -651,3 +651,269 @@ Cuando el lift es más grande que uno, quiere decir que el modelo es superior
 en encontra positivos que una estrategia de tomar casos al azar. Por las mismas
 razones que las curvas de precisión-exhaustividad, la gráfica puede ser ruidosa
 para puntos de corte altos.
+
+
+
+
+### Regresión logística para más de 2 clases {-}
+
+Consideramos ahora un problema con más de dos clases, de manera que $G ∈ {1,2,...,K}$
+($K$ clases), y tenemos $X = (X1 ...,Xp)$ entradas.
+¿Cómo generalizar el modelo de regresión logística para este problema?
+Una estrategia es la de uno contra todos:
+
+En clasificación *uno contra todos*, hacemos
+
+1. Para cada clase $g\in\{1,\ldots,K\}$ entrenamos un modelo de regresión
+logística (binaria) $\hat{p}^{(g)}(x)$, tomando como positivos a los casos de 1
+clase $g$, y como negativos a todo el resto. Esto lo hacemos como en las secciones anteriores, y de manera independiente para cada clase.
+
+2. Para clasificar un nuevo caso $x$, 
+calculamos 
+$$\hat{p}^{(1)}, \hat{p}^{(2)},\ldots, \hat{p}^{(K)}$$
+
+y clasificamos a la clase de máxima probabilidad
+$$\hat{G}(x) = \arg\max_g \hat{p}^{(g)}(x)$$
+Nótese que no hay ninguna garantía de que las probabilidades de clase
+sumen 1, pues se trata de estimaciones independientes de cada clase. En este sentido, produce estimaciones que en realidad no satisfacen las propiedades del modelo de probabilidad establecido --- aunque pueden normalizarse. Sin embargo, esta estrategia es simple y en 
+muchos casos funciona bien.
+
+
+
+## Regresión logística multinomial 
+
+Si queremos obtener estimaciones de las probabilidades de clase que sumen uno, entonces tenemos que contruir las estimaciones de cada clase de clase de manera conjunta.
+Como vimos antes, tenemos que estimar, para cada $x$ y $g\in\{1,\ldots, K\}$,
+las probabilidades condicionales de clase:
+$$p_g(x) = P(G = g|X = x).$$
+Una manera simple de construir estas clases es considerando un juego de
+coeficientes para cada clase, por ejemplo, para la clase $j$ consideramos
+el predictor lineal dado por:
+
+$$L_j = \beta_0^j + \beta_1^jx_1 + \ldots + \beta_p^j x_p.$$
+No podemos sumar y normalizar estos valores pues pueden tomar valores negativos,
+por ejemplo. Esto podemos evitarlo tomando la exponencial:
+
+
+$$Z_j = \exp(\beta_0^j + \beta_1^jx_1 + \ldots + \beta_p^j x_p).$$
+Estos valores $Z_j$ son positivos, así que podemos definir
+
+$$Z = \sum_{j=1}^L Z_j, $$
+y calcular 
+
+$$p_j(x) = \frac{Z_j}{Z} = \frac{\exp(\beta_0^j + \beta_1^jx_1 + \ldots + \beta_p^j x_p)}{Z}$$
+A estas probabilidades (que suman 1 sobre todas las clases) se les llama el **softmax** de las cantidades $L_j$, es decir,
+el softmax de $L_1, \ldots, L_K$ es 
+
+$$\frac{\exp(L_j)}{\sum_{j=1}^K \exp(L_j)}$$
+Esta es la idea básica de regresión logística multinomial. 
+
+Nótese sin embargo
+que estos coeficientes *sobreparametrizan* las probabilidades, pues como estas
+probabilidades suman 1, una vez que conocemos las primeras $K-1$, la otra debería
+estar determinada. Esto implica, entre otras cosas, que hay múltiples formas
+de expresar con el mismo modelo con distintos parámetros (¿ejemplo?). 
+
+
+- Este es un problema que vamos a resolver más adelante 
+usando **regularización**. Esta sobreparametrización se usa frecuentemente en modelos
+de redes neuronales, por ejemplo.
+- Sin embargo, también es posible escoger una clase de referencia (por ejemplo la $K$),
+y poner $\beta^K_{j}=0$ para toda $j$, de forma que $Z_K=1$, y entonces
+
+$$p_K(x) = \frac{1}{1 + \sum_{j=1}^{K-1} Z_j},$$
+y las probabilidades suman uno otra vez. Esta parametrización es más frecuente
+en regresión logística multinomial tradicional.
+
+- En regresión logística usamos esta última parametrización: para dos clases, tenemos
+que 
+$$p_1(x) = \frac{\exp(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_o)}{1 + \exp(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)} $$
+y como $K=2$,
+$$p_2(x) = \frac{1}{1 + \exp(\beta_0 + \beta_1 x_1 + \cdots + \beta_p x_p)}$$
+
+Una vez definido el modelo multinomial, podemos usar algún método númerico para minimizar la devianza (por ejemplo,
+descenso en gradiente). 
+
+### Interpretación de coeficientes {-}
+
+
+Para comparar la clase $j$ con la clase $k$ notamos que
+
+$$\log\left (\frac{p_j(x)}{p_k(x)}\right ) = 
+(\beta_{0,{j}}- \beta_{0,{k}}) + (\beta_{1,{j}}-\beta_{1,{k}} )x_1 + \ldots + (\beta_{p,{j}} -\beta_{p,{k}})  x_p$$
+
+Así que sólo hace falta restar los coeficientes. Estos coeficientes nos dicen cómo
+cambia $p_j$ en relación a $p_k$ cuando una entrada $x_i$ cambia.
+
+## Ejemplo: Clasificación de dígitos con regresión multinomial
+
+```{r, message = FALSE, warning = FALSE}
+digitos_entrena <- read_csv('../datos/zip-train.csv')
+digitos_prueba <- read_csv('../datos/zip-test.csv') 
+names(digitos_entrena)[1] <- 'digito'
+names(digitos_entrena)[2:257] <- paste0('pixel_', 1:256)
+names(digitos_prueba)[1] <- 'digito'
+names(digitos_prueba)[2:257] <- paste0('pixel_', 1:256)
+digitos_entrena <- digitos_entrena %>% 
+  mutate(digito = factor(digito, levels = seq(0, 9, 1)))
+digitos_prueba <- digitos_prueba %>% 
+  mutate(digito = factor(digito, levels = seq(0, 9, 1)))
+```
+
+En este ejemplo, usamos la función *multinom* de *nnet*, que usa
+BFGS para hacer la optimización (puedes también usar *keras* o *glmnet* que
+veremos más adelante):
+
+```{r}
+reg_multinomial <- multinom_reg() %>% 
+  set_engine("nnet") %>% 
+  set_args(MaxNWt = 100000, maxit = 20)
+mod_mult <- reg_multinomial %>% fit(digito ~ ., data = digitos_entrena)
+```
+
+Checamos para diagnóstico la matriz de confusión y devianza **de entrenamiento** 
+
+```{r}
+preds_entrena <- predict(mod_mult, digitos_entrena) %>% 
+  bind_cols(digitos_entrena %>% select(digito))
+preds_entrena_proba <- predict(mod_mult, digitos_entrena, type = "prob") %>% 
+  bind_cols(digitos_entrena %>% select(digito))
+preds_entrena_proba %>% mn_log_loss(digito, .pred_0:.pred_9)
+table(preds_entrena$.pred_class, preds_entrena$digito)
+```
+
+
+Ahora validamos con la muestra de prueba y calculamos error de clasificación:
+```{r}
+preds <- predict(mod_mult, digitos_prueba) %>% 
+  bind_cols(digitos_prueba %>% select(digito))
+preds_proba <- predict(mod_mult, digitos_prueba, type = "prob") %>% 
+  bind_cols(digitos_prueba %>% select(digito))
+preds_proba %>% mn_log_loss(digito, .pred_0:.pred_9)
+
+confusion_prueba <- table(preds$.pred_class, preds$digito)
+confusion_prueba
+sum(diag(confusion_prueba))/sum(confusion_prueba)
+round(prop.table(confusion_prueba, 2), 2)
+```
+
+El resultado no es muy bueno. Veremos más adelante mejores métodos para 
+este problema. ¿Podemos interpretar el modelo?
+
+Una idea es tomar los coeficientes y graficarlos según la estructura de
+las imágenes:
+
+```{r}
+coefs <- coef(mod_mult$fit)
+coefs_reng <- coefs[1, , drop =FALSE]
+coefs <- rbind(coefs_reng, coefs)
+coefs[1 , ] <- 0
+dim(coefs)
+beta_df <- coefs[,-1] %>% as.data.frame %>% 
+  mutate(digito = 0:(nrow(coefs)-1)) %>%
+  gather(pixel, valor, contains('pixel')) %>%
+  separate(pixel, into = c('str','pixel_no'), sep='_') %>%
+  mutate(x = (as.integer(pixel_no)-1) %% 16, y = -((as.integer(pixel_no)-1) %/% 16))
+head(beta_df)
+```
+
+Podemos cruzar la tabla con sí misma para hacer comparaciones de cómo discrimina
+el modelo entre cada par de dígitos:
+
+```{r}
+tab_coef <- beta_df %>% select(digito, x, y, valor)
+tab_coef_1 <- tab_coef
+names(tab_coef_1) <- c('digito_1','x','y','valor_1')
+tab_cruzada <- full_join(tab_coef_1, tab_coef) %>% mutate(dif = valor_1 - valor)
+tab_cruzada <- tab_cruzada %>% group_by(digito, digito_1) %>% 
+  mutate(dif_s = (dif - mean(dif))/sd(dif)) %>%
+  mutate(dif_p = pmin(pmax(dif_s, -2), 2))
+```
+
+```{r}
+ggplot(tab_cruzada, aes(x=x, y=y)) + geom_tile(aes(fill = dif_p)) + 
+  facet_grid(digito_1~digito) + scale_fill_distiller(palette = "Spectral")
+```
+
+
+
+### Discusión {-}
+
+Nótese que no corrimos el modelo hasta convergencia. Vamos a hacerlo ahora:
+
+
+```{r}
+mod_mult <- reg_multinomial %>% 
+  set_args(maxit = 500) %>% 
+  fit(digito ~ ., data = digitos_entrena)
+```
+
+
+
+```{r}
+preds_entrena <- predict(mod_mult, digitos_entrena) %>% 
+  bind_cols(digitos_entrena %>% select(digito))
+preds_entrena_proba <- predict(mod_mult, digitos_entrena, type = "prob") %>% 
+  bind_cols(digitos_entrena %>% select(digito))
+preds_entrena_proba %>% mn_log_loss(digito, .pred_0:.pred_9)
+table(preds_entrena$.pred_class, preds_entrena$digito)
+```
+
+
+Ahora validamos con la muestra de prueba y calculamos error de clasificación:
+```{r}
+preds <- predict(mod_mult, digitos_prueba) %>% 
+  bind_cols(digitos_prueba %>% select(digito))
+preds_proba_sobre <- predict(mod_mult, digitos_prueba, type = "prob") %>% 
+  bind_cols(digitos_prueba %>% select(digito))
+preds_proba_sobre %>% mn_log_loss(digito, .pred_0:.pred_9)
+
+confusion_prueba <- table(preds$.pred_class, preds$digito)
+confusion_prueba
+sum(diag(confusion_prueba))/sum(confusion_prueba)
+round(prop.table(confusion_prueba, 2), 2)
+```
+
+Y nota que la devianza y el error de clasificación son
+más grande que cuando nos detuvimos con 
+menos iteraciones. ¿Por qué pasa esto? Discute en clase:
+
+- Grafica los coeficientes para este segundo modelo
+- ¿En cuál de los dos modelos es más fácil interpretar los coeficientes? ¿En cuál
+es menor el error?
+- ¿Cuál crees que es el problema de este segundo modelo comparado con el primero? ¿Por qué crees que sucede? ¿Cómo podríamos corregir este problema?
+
+
+## Curvas ROC multiclase
+
+En un problema multiclase, podemos construir curvas individuales para cada una de clases 
+de diferentes maneras. Una primera técnica es considerar la predicción de cada
+clase contra el resto_
+
+```{r}
+
+curvas_digitos <- roc_curve(preds_proba_sobre, digito, .pred_0:.pred_9)
+curvas_digitos
+```
+
+Que podemos graficar como:
+
+```{r}
+autoplot(curvas_digitos)
+```
+
+Donde vemos que las clases más fáciles son 0, 1, 6 y 9. El resto de las clases
+es más difícil de discriminar. Podemos usar el promedio de estas AUC para
+dar un resumen de desempeño (ya sea ponderado o no por la frecuencia de cada clase):
+
+```{r}
+# Primer modelo
+roc_auc(preds_proba, digito, .pred_0:.pred_9, estimator = "macro") %>% 
+  mutate(across(where(is.numeric), round, 3))
+# Segundo modelo
+roc_auc(preds_proba_sobre, digito, .pred_0:.pred_9, estimator = "macro")  %>% 
+  mutate(across(where(is.numeric), round, 3))
+
+```
+
+
