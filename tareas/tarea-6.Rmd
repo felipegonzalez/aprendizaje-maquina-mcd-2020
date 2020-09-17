@@ -1,0 +1,218 @@
+---
+title: 'Tarea 6: evaluación en problemas de clasificación'
+output: html_notebook
+---
+
+En este problema evaluamos un clasificador para predecir qué clientes
+comprararán un seguro para caravanas (*campers*). Tenemos cierta información
+socioeconómica de los clientes, así como información acerca de sus compras
+y conducta. Este problema es interesante también porque presenta
+desbalance considerable entre la clase de compra y la de no compra.
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+```
+
+Consideremos los siguientes datos (del paquete @ISLR):
+
+The data contains 5822 real customer records. Each record consists of 86 variables, containing sociodemographic data (variables 1-43) and product ownership (variables 44-86). The sociodemographic data is derived from zip codes. All customers living in areas with the same zip code have the same sociodemographic attributes. Variable 86 (Purchase) indicates whether the customer purchased a caravan insurance policy. Further information on the individual variables can be obtained at http://www.liacs.nl/~putten/library/cc2000/data.html
+
+Aquí puedes ver un resumen de las variables, **aunque por el momento no nos preocupamos
+mucho por esto**:
+
+Todas las variables son numéricas, excepto MOSTYPE, MOSHOOFD
+
+MOSTYPE: Customer Subtype; see L0 MAANTHUI: Number of houses 1 - 10 MGEMOMV: Avg size household 1 - 6 MGEMLEEF: Avg age; see L1 MOSHOOFD: Customer main type; see L2
+
+MGODRK: Roman catholic MGODPR: Protestant … MGODOV: Other religion MGODGE: No religion MRELGE: Married MRELSA: Living together MRELOV: Other relation MFALLEEN: Singles MFGEKIND: Household without children MFWEKIND: Household with children MOPLHOOG: High level education MOPLMIDD: Medium level education MOPLLAAG: Lower level education MBERHOOG: High status MBERZELF: Entrepreneur MBERBOER: Farmer MBERMIDD: Middle management MBERARBG: Skilled labourers MBERARBO: Unskilled labourers MSKA: Social class A MSKB1: Social class B1 MSKB2: Social class B2 MSKC: Social class C MSKD: Social class D MHHUUR: Rented house MHKOOP: Home owners MAUT1: 1 car MAUT2: 2 cars MAUT0: No car MZFONDS: National Health Service MZPART: Private health insurance MINKM30: Income < 30.000 MINK3045: Income 30-45.000 MINK4575: Income 45-75.000 MINK7512: Income 75-122.000 MINK123M: Income >123.000 MINKGEM: Average income MKOOPKLA: Purchasing power class
+
+PWAPART: Contribution private third party insurance PWABEDR: Contribution third party insurance (firms) … PWALAND: Contribution third party insurane (agriculture) PPERSAUT: Contribution car policies PBESAUT: Contribution delivery van policies PMOTSCO: Contribution motorcycle/scooter policies PVRAAUT: Contribution lorry policies PAANHANG: Contribution trailer policies PTRACTOR: Contribution tractor policies PWERKT: Contribution agricultural machines policies PBROM: Contribution moped policies PLEVEN: Contribution life insurances PPERSONG: Contribution private accident insurance policies PGEZONG: Contribution family accidents insurance policies PWAOREG: Contribution disability insurance policies PBRAND: Contribution fire policies PZEILPL: Contribution surfboard policies PPLEZIER: Contribution boat policies PFIETS: Contribution bicycle policies PINBOED: Contribution property insurance policies PBYSTAND: Contribution social security insurance policies AWAPART: Number of private third party insurance 1 - 12 AWABEDR: Number of third party insurance (firms) … AWALAND: Number of third party insurance (agriculture) APERSAUT: Number of car policies ABESAUT: Number of delivery van policies AMOTSCO: Number of motorcycle/scooter policies AVRAAUT: Number of lorry policies AAANHANG: Number of trailer policies ATRACTOR: Number of tractor policies AWERKT: Number of agricultural machines policies ABROM: Number of moped policies ALEVEN: Number of life insurances APERSONG: Number of private accident insurance policies AGEZONG: Number of family accidents insurance policies AWAOREG: Number of disability insurance policies ABRAND: Number of fire policies AZEILPL: Number of surfboard policies APLEZIER: Number of boat policies AFIETS: Number of bicycle policies AINBOED: Number of property insurance policies ABYSTAND: Number of social security insurance policies CARAVAN: Number of mobile home policies 0 - 1
+
+L0: Customer subtype
+
+1: High Income, expensive child 2: Very Important Provincials 3: High status seniors 4: Affluent senior apartments 5: Mixed seniors 6: Career and childcare 7: Dinki's (double income no kids) 8: Middle class families 9: Modern, complete families 10: Stable family 11: Family starters 12: Affluent young families 13: Young all american family 14: Junior cosmopolitan 15: Senior cosmopolitans 16: Students in apartments 17: Fresh masters in the city 18: Single youth 19: Suburban youth 20: Etnically diverse 21: Young urban have-nots 22: Mixed apartment dwellers 23: Young and rising 24: Young, low educated 25: Young seniors in the city 26: Own home elderly 27: Seniors in apartments 28: Residential elderly 29: Porchless seniors: no front yard 30: Religious elderly singles 31: Low income catholics 32: Mixed seniors 33: Lower class large families 34: Large family, employed child 35: Village families 36: Couples with teens 'Married with children' 37: Mixed small town dwellers 38: Traditional families 39: Large religous families 40: Large family farms 41: Mixed rurals
+
+L2: customer main type keys:
+
+1: Successful hedonists 2: Driven Growers 3: Average Family 4: Career Loners 5: Living well 6: Cruising Seniors 7: Retired and Religeous 8: Family with grown ups 9: Conservative families 10: Farmers
+
+
+Queremos predecir la variable *Purchase*, que indica si el cliente compró o no
+el seguro de camper:
+
+```{r}
+caravan <- read_csv("../datos/caravan.csv") %>% 
+  mutate(MOSTYPE = factor(MOSTYPE),
+         MOSHOOFD = factor(MOSHOOFD))
+set.seed(823)
+# usamos muestreo estratificado para tener el mismo balance
+# de Purchase en 
+caravan_split = initial_split(caravan, strata = Purchase, prop = 0.8)
+caravan_split
+caravan_ent <- training(caravan_split)
+```
+
+Y vemos el desbalance de clases:
+
+```{r}
+nrow(caravan_ent)
+caravan_ent %>% count(Purchase) %>% 
+  mutate(pct = 100 * n / sum(n)) %>% 
+  mutate(pct = round(pct, 2))
+```
+
+Esta es la distribución natural de respuesta que vemos en los datos, y tenemos relativamente pocos
+datos en la categoría "Yes".
+
+
+Y usaremos regresión logística (aunque lo mismo aplicará para métodos más avanzados)
+
+```{r}
+# preparacion de datos
+caravan_receta <- recipe(Purchase ~ ., caravan) %>%
+  # convertir a dummy variables nominales, esto lo explicamos
+  # con detalle más adelante
+  step_dummy(all_nominal(), -Purchase) %>%
+  step_normalize(all_predictors()) %>% 
+  step_relevel(Purchase,  ref_level = "Yes") %>% 
+  prep()
+# modelo - nota: puedes ajustar los parámetros de descenso, pero 
+# para este ejercicio no es tan importante.
+modelo_log <- 
+  logistic_reg() %>% 
+  set_engine("keras")  %>% 
+  set_mode("classification") %>% 
+  fit(Purchase ~ ., data = caravan_receta %>% juice)
+```
+
+#### Análisis con tasas de correctos (no es apropiado) {-}
+
+La matriz de confusión de prueba es:
+
+```{r, message=FALSE, warning = FALSE}
+prueba_procesado <- bake(caravan_receta, testing(caravan_split))
+predictions_glm <- modelo_log %>%
+  predict(new_data = prueba_procesado) %>%
+  bind_cols(prueba_procesado %>% select(Purchase))
+predictions_glm %>%
+  conf_mat(Purchase, .pred_class)
+```
+
+Y la de entrenamiento:
+
+```{r, message=FALSE, warning = FALSE}
+predictions_ent_glm <- modelo_log %>%
+  predict(new_data = juice(caravan_receta)) %>%
+  bind_cols(juice(caravan_receta) %>% select(Purchase))
+predictions_ent_glm %>%
+  conf_mat(Purchase, .pred_class)
+```
+
+**Pregunta 1**: ¿qué piensas del desempeño de este clasificador? ¿Cómo crees
+que este paquete decide clasificar en "Yes" o "No" dependiendo del modelo de
+regresión logística que ajustaste? 
+
+**Pregunta 2** Calcula especificidad y sensiblidad para este clasificador.
+¿Crees que es útil? ¿Existen clasificadores triviales que se desempeñen de manera similar
+
+
+#### Análisis correcto usando probabilidades {-}
+
+Podemos trabajar con probabilidades
+en lugar de predicciones de clase con punto de corte de 0.5.
+
+Las probabilidades que obtenemos podemos visualizarlas:
+
+```{r}
+preds_prob <- modelo_log %>%
+  predict(new_data = prueba_procesado, type = "prob") %>%
+  bind_cols(prueba_procesado %>% select(Purchase)) %>% 
+  select(.pred_Yes, .pred_No, Purchase)
+ggplot(preds_prob, aes(x = .pred_Yes)) + geom_histogram()
+```
+que en general muestran probabilidades bajas de comprar este producto.
+
+Por ejemplo, podemos visualizar con una curva ROC (o curva lift, precisión recall, o alguna otra similar que
+tome en cuenta probabilidades):
+
+```{r, fig.width = 5, fig.height = 4}
+preds_prob <- modelo_log %>%
+  predict(new_data = prueba_procesado, type = "prob") %>%
+  bind_cols(prueba_procesado %>% select(Purchase)) %>% 
+  select(.pred_Yes, .pred_No, Purchase)
+datos_roc <- roc_curve(preds_prob, Purchase, .pred_Yes)
+autoplot(datos_roc) 
+```
+
+
+Donde vemos que podemos alcanzar buenos niveles de sensibilidad si aceptamos alguna degradación en la especificidad,
+que originalmente es muy alta. Por ejemplo, cortando en 0.05 podemos obtener especificidad y sensibilidad
+que posiblemente sean adecuadas para el problema:
+
+```{r}
+datos_roc %>% filter(abs(.threshold - 0.05) < 1e-4) %>% round(3)
+```
+
+
+Y evaluamos también con devianza y auc:
+
+```{r}
+metricas <- metric_set(roc_auc, mn_log_loss)
+metricas
+preds_prob %>% 
+  metricas(Purchase, .pred_Yes)
+```
+
+**Pregunta 3** ¿Qué devianza tiene un modelo que da la probabilidad base de 0.5 a
+todos los casos? ¿El modelo anterior es superior o inferior a este modelo base?
+¿Qué pasa si usas la probabilidad de compra en la muestra de entrenamiento como 
+tu predicción?
+
+## Un modelo más simple
+
+Supongamos que usamos un modelo que sólo incluye unas cuantas variables:
+
+ABRAND: Number of fire policies 
+APERSAUT: Number of car policies
+
+```{r}
+caravan_ent %>%
+  select(ABRAND, APERSAUT) %>% 
+  summary
+```
+
+
+```{r}
+modelo_log_simple <- 
+  logistic_reg() %>% 
+  set_engine("keras")  %>% 
+  set_mode("classification") %>% 
+  fit(Purchase ~ MOPLHOOG + ABRAND + APERSAUT, data = caravan_receta %>% juice)
+```
+
+
+```{r, fig.width = 5, fig.height = 4}
+preds_prob_simple <- modelo_log_simple %>%
+  predict(new_data = prueba_procesado, type = "prob") %>%
+  bind_cols(prueba_procesado %>% select(Purchase)) %>% 
+  select(.pred_Yes, Purchase)
+datos_roc <- roc_curve(preds_prob_simple, Purchase, .pred_Yes)
+autoplot(datos_roc) 
+```
+
+**Pregunta 4**: Corta en una probablilidad que te de alrededor 80% de sensibilidad
+(probabilidad relativamente alta de identificar a los compradores). ¿Cómo se
+compara la especificidad de este modelo con la que obtendrías con el modelo
+anterior, al mismo nivel de sensibilidad? Imagina un posible problema que quisieras
+resolver con este clasificador. =La diferencia que encontraste tiene relevancia para
+este problema?
+
+**Pregunta 5** Grafica las dos curvas ROC de estos clasificadores y explica
+cuál funciona mejor.
+
+
+
+
+
