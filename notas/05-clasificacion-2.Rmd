@@ -399,7 +399,7 @@ Para minimizar la tasa de incorrectos conviene poner
 $\alpha= 0.5$. Sin embargo, es común que este no es el único fin de un clasificador bueno (pensar en ejemplo de fraude). 
 
 
-- Cuando incrementamos $\alpha, quiere decir que exigimos estar más seguros de que un caso es positivo para clasificarlo como positivo. Esto quiere decir que la sensibilidad (recall) tiende a ser más chica.
+- Cuando incrementamos $\alpha$, quiere decir que exigimos estar más seguros de que un caso es positivo para clasificarlo como positivo. Esto quiere decir que la sensibilidad (recall) tiende a ser más chica.
 Por otro lado la precisión tiende a aumentar, pues el porcentaje de verdaderos positivos entre nuestras predicciones positivas será mayor. También la especificidad tiende a ser más grande.
 
 #### Ejemplo {-}
@@ -632,11 +632,12 @@ ggplot(gain_tbl,
   geom_path(aes(colour = modelo), size = 1.2) +
   geom_abline(colour = "gray") + 
   coord_equal() +
-  xlab("% Clasificado positivo") + ylab("Precisión")
+  xlab("% Clasificado positivo") + ylab("Sensibilidad")
 ```
 
 Y un análogo para las curvas de precisión-recall es la curva del lift. En el
-eje vertical graficamos la precisión entre lel % de clasificados como positivos:
+eje vertical graficamos la sensibilidad entre el % de clasificados como positivos
+(que es lo mismo que la precisión entre el % de casos positivos):
 
 
 ```{r}
