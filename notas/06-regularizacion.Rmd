@@ -949,3 +949,149 @@ el modelo esté sobreparametrizado?
 
 
 
+## Regularización lasso
+
+
+Otra forma de regularización es el **lasso**, que en lugar de penalizar
+con la suma de cuadrados en los coeficientes, penaliza por la suma
+de su valor absoluto.
+
+```{block2, type='comentario'}
+En regresión **lasso** (lineal/logística), para $\lambda>0$ fija minimizamos
+$$D_{\lambda}^2 (\beta)=D(\beta)  + \lambda\sum_{i=1}^p |\beta_j|$$,
+donde suponemos que las entradas están estandarizadas (centradas y escaladas por
+la desviación estándar).
+```
+
+El problema de minimización de ridge y de lasso se pueden reescribir como
+problemas de restricción:
+
+
+```{block2, type='comentario'}
+En regresión **lasso** (lineal/logística), para $s>0$ fija minimizamos
+$$D(\beta), $$
+sujeto a
+$$\sum_{i=1}^p |\beta_j|< s$$
+donde suponemos que las entradas están estandarizadas (centradas y escaladas por
+la desviación estándar).
+```
+
+```{block2, type='comentario'}
+En regresión **ridge** (lineal/logística), para $t>0$ fija minimizamos
+$$D(\beta), $$
+sujeto a
+$$\sum_{i=1}^p \beta_j^2 < t$$
+donde suponemos que las entradas están estandarizadas (centradas y escaladas por
+la desviación estándar).
+```
+$s$ y $t$ chicas corresponden a valores de penalización $\lambda$ grandes.
+
+
+En un principio, puede parecer que ridge y lasso deben dar resultados
+muy similares, pues en ambos casos penalizamos por el tamaño de los coeficientes.
+Sin embargo, son distintos de una manera muy importante.
+
+En la siguiente gráfica representamos las curvas de nivel de $D(\beta)$. 
+Recordemos que en mínimos cuadrados o regresión logística intentamos minimizar
+esta cantidad sin restricciones, y este mínimo se encuentra en el centro 
+de estas curvas de nivel. Para el problema restringido, buscamos más
+bien la curva de nivel más baja que intersecta la restricción:
+
+```{r}
+knitr::include_graphics('./figuras/ridge_lasso.png')
+```
+Y obsérvese ahora que la solución de lasso *puede hacer algunos coeficientes
+igual a 0*. Es decir,
+
+```{block2, type='comentario'}
+En regresión ridge, los coeficientes se encogen gradualmente desde la solución
+no restringida hasta el origen. Ridge es un método de **encogimiento de coeficientes.**
+
+En regresión lasso, los coeficientes se encogen gradualmente, pero también
+se excluyen  variables del modelo. Por eso lasso es un método de
+*encogimiento y selección de variables*.
+```
+
+```{block2, type='comentario'}
+- Regresión ridge es especialmente útil cuando tenemos varias variables de entrada
+fuertemente correlacionadas. Regresión ridge intenta encoger juntos coeficientes de variables
+correlacionadas para reducir varianza en las predicciones.
+- Lasso encoge igualmente coeficientes para reducir varianza, pero también comparte
+similitudes con *regresión de mejor subconjunto*, en donde para cada número de variables $l$
+buscamos escoger las $l$ variables que den el mejor modelo. Sin embargo, el enfoque
+de lasso es más escalable y puede calcularse de manera más simple.
+- Descenso en gradiente no es apropiado para regresión lasso (ver documentación de
+glmnet para ver cómo se hace en este paquete). El problema es que los coeficientes
+nunca se hacen exactamente cero, pues la restricción no es diferenciable en el origen 
+(coeficientes igual a cero).
+```
+
+#### Ejemplo {-}
+
+Consideramos el ejemplo de bodyfat:
+
+```{r, message=FALSE, warning=FALSE}
+library(readr)
+dat_grasa <- read_csv(file = '../datos/bodyfat.csv')
+# mixture = 1 es lasso, mixture = 0 es ridge
+modelo_regularizado <-  linear_reg(mixture = 1, penalty = tune()) %>% 
+  set_engine("glmnet") 
+flujo_reg <- workflow() %>% 
+  add_model(modelo_regularizado) %>% 
+  add_recipe(grasa_receta)
+```
+
+```{r}
+validacion_particion <- vfold_cv(grasa_ent, v = 10)
+metricas_vc <- tune_grid(flujo_reg,
+  resamples = validacion_particion,
+  grid = bf_grid,
+  metrics = metric_set(rmse, mae)) 
+metricas_resumen <- metricas_vc %>% collect_metrics()
+metricas_resumen
+```
+
+```{r}
+g_1 <- ggplot(metricas_resumen %>% filter(.metric == "mae"), 
+       aes(x = penalty, y = mean, ymin = mean - std_err, ymax = mean + std_err)) +
+  geom_linerange() +
+  geom_point(colour = "red") +
+  scale_x_log10()
+g_1
+```
+
+Veamos los coeficientes para un modelo regularizado con la $\lambda$
+máxima con error consistente con el mínimo (por validación cruzada):
+
+```{r}
+mejor <- select_best(metricas_vc, metric = "mae", penalty)
+modelo_final <- 
+  flujo_reg %>%
+  finalize_workflow(mejor) %>%
+  fit(data = grasa_ent)
+coeficientes <- modelo_final %>% pull_workflow_fit() %>% tidy
+coeficientes %>% mutate(across(where(is.numeric), round, 2))
+```
+
+Y nótese que este modelo solo incluye 5 variables. El error de predicción
+es similar al modelo que incluye todas las variables, y terminamos
+con un modelo considerablemente más simple con error comparable
+
+La traza confirma que la regularización lasso, además de encoger 
+coeficientes, saca variables del modelo conforme el valor de regularización
+aumenta:
+
+```{r}
+modelo_1 <- linear_reg(mixture = 1) %>% 
+  set_engine("glmnet") %>% 
+  fit(grasacorp ~ estatura + peso + abdomen + muslo + biceps + rodilla + edad + cuello, 
+      grasa_ent)
+coefs <- tidy(modelo_1$fit) %>% 
+  filter(term != "(Intercept)")
+ggplot(coefs, 
+       aes(x = lambda, y = estimate, colour = term)) +
+  geom_line(size = 1.4) + scale_x_log10() +
+  scale_colour_manual(values = cbb_palette)
+```
+
+
