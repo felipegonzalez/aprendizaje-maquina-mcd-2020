@@ -24,7 +24,7 @@ $$\hat{\beta} = {\textrm{argmin}}_\beta D(\beta)$$
 donde $D(\beta)$ es la devianza de *entrenamiento*,buscamos minimizar una función objetivo modificada
 
 $$\hat{\beta} = {\textrm{argmin}}_\beta \{D(\beta) + \Omega(\beta)\}$$
-donde $\Omega(\beta)$ puede ser grande algunas configuraciones de los 
+donde $\Omega(\beta)$ puede ser grande para algunas configuraciones de los 
 parámetros que son "poco verosímiles". Este cambio evita que el proceso
 de minimización sobrajuste los datos haciendo $D(\beta)$ demasiado chico.
 
@@ -846,3 +846,106 @@ de la familia de modelos que consideramos.
 validación cruzada es más seguro que usar el error de entrenamiento, que
 muchas veces puede estar fuertemente sesgado hacia abajo. Sin embargo, lo
 mejor en este caso es utilizar una muestra de prueba.
+
+
+
+### Ejercicio {-}
+
+Consideremos el ejemplo de reconocimiento de dígitos y regresión logística multinomial.
+Vimos que obtuvimos mejores resultados detendiéndonos prematuramente en el ajuste
+que minimizando el error de entrenamiento.
+
+La razón es que usamos descenso en gradiente comenzando con coeficientes en 0. Si hacemos
+iteraciones, nos movemos en dirección del mínimo sin alejarnos mucho del origen, y 
+esto resulta ser una forma de regularización: los coeficientes están "encogidos" hacia el origen.
+Esta es una manera de regularizar, y se llama normalmente *early stopping*.
+
+Podemos también hacer regresión ridge para el problema de los dígitos.
+
+
+```{r, message=FALSE, warning=FALSE}
+digitos_entrena <- read_csv('../datos/zip-train.csv')
+digitos_prueba <- read_csv('../datos/zip-test.csv')
+names(digitos_entrena)[1] <- 'digito'
+names(digitos_entrena)[2:257] <- paste0('pixel_', 1:256)
+names(digitos_prueba)[1] <- 'digito'
+names(digitos_prueba)[2:257] <- paste0('pixel_', 1:256)
+digitos_entrena <- digitos_entrena %>% 
+  mutate(digito = factor(digito, levels = seq(0, 9, 1)))
+digitos_prueba <- digitos_prueba %>% 
+  mutate(digito = factor(digito, levels = seq(0, 9, 1)))
+```
+
+Vamos a correr modelos con varias lambda, y estimar su error 
+con validación cruzada. Primero definimos el modelo y el preprocesamiento
+
+```{r}
+set.seed(2912)
+if(TRUE){
+  digitos_entrena_s <- sample_n(digitos_entrena, size = 2000)
+} else {
+  digitos_entrena_s <- digitos_entrena
+}
+modelo_digitos <- multinom_reg(penalty = tune()) %>% 
+  set_engine("keras") %>% 
+  set_mode("classification") %>%
+  set_args(epochs = 5000, optimizer = keras::optimizer_sgd(lr = 0.2),
+           batch_size = nrow(digitos_entrena_s), 
+           verbose = FALSE, hidden_units = 10)
+receta_digitos <- recipe(digito ~ ., digitos_entrena_s)
+
+flujo_digitos <- workflow() %>% 
+  add_model(modelo_digitos) %>% 
+  add_recipe(receta_digitos)
+```
+
+Ahora definimos los cortes de validación cruzada y evaluamos
+
+```{r}
+particion_vc <- validation_split(digitos_entrena_s, strata = digito, 0.9)
+grid_lambda <- tibble(penalty = exp(c(-10, -5, -4, -3, -2)))
+res_val <- tune_grid(
+          flujo_digitos, 
+          resamples = particion_vc, 
+          grid = grid_lambda,
+          metrics = metric_set(mn_log_loss))
+res_val %>% collect_metrics()
+```
+
+
+
+Ahora hacemos predicciones para el conjunto de prueba, usando
+la lambda que nos dio el menor error de validación cruzada:
+
+```{r}
+mejor <- select_best(res_val, metric = "mn_log_loss")
+modelo_final <- 
+  flujo_digitos %>%
+  finalize_workflow(mejor) %>%
+  fit(data = digitos_entrena_s)
+digitos_pr <- bake(modelo_final %>% pull_workflow_prepped_recipe, digitos_prueba)
+predict(modelo_final, digitos_pr, type ="prob") %>% 
+  bind_cols(digitos_pr %>% select(digito)) %>% 
+  mn_log_loss(digito, .pred_0:.pred_9)
+
+```
+
+Y evaluamos la tasa de clasificación incorrecta:
+
+```{r}
+predict(modelo_final, digitos_pr) %>% 
+  bind_cols(digitos_pr %>% select(digito)) %>% 
+  accuracy(digito, .pred_class)
+```
+
+Este modelo mejora considerablemente al modelo sin regularización.
+
+**Observación**: Cuando vimos regresión multinomial, la última clase es
+uno menos la suma del resto de probabilidades de clase ($(K-1)(p+1)$ parámetros).
+La salida de glmnet,
+sin embargo, tiene coeficientes para todas las clases ($K(p+1)$ parámetros). 
+¿Por qué en regresión ridge no es tan importante que 
+el modelo esté sobreparametrizado? 
+
+
+
