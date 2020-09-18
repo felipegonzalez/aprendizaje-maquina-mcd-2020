@@ -71,7 +71,7 @@ Y usaremos regresión logística (aunque lo mismo aplicará para métodos más a
 
 ```{r}
 # preparacion de datos
-caravan_receta <- recipe(Purchase ~ ., caravan) %>%
+caravan_receta <- recipe(Purchase ~ ., caravan_ent) %>%
   # convertir a dummy variables nominales, esto lo explicamos
   # con detalle más adelante
   step_dummy(all_nominal(), -Purchase) %>%
