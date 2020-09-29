@@ -768,13 +768,13 @@ ggplot(evals_tbl %>%
          pivot_wider(names_from = tipo, values_from = .estimate), 
        aes(x = prueba, y = val_cruzada)) +
   geom_point() + facet_wrap(~ .metric) +
-  geom_abline(colour = "red")
+  geom_abline(colour = "red") + xlim(c(0.65,0.75)) + ylim(c(0.65,0.75))
 ```
 
 Observa los rangos de los ejes. Vemos que aunque los dos tipos de estimaciones
 están centradas 
 en lugares similares, el error por validación
-cruzada es ligeramente pesimista (como esperábamos), y no está muy relacionado
+cruzada es ligeramente pesimista (como esperábamos), y no está muy correlacionado
 con el error de prueba.
 
 Sin embargo, cuando usamos validación cruzada para seleccionar
