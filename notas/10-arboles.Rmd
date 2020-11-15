@@ -35,8 +35,10 @@ por ejemplo:
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(tidymodels)
+theme_set(theme_minimal(base_size = 14))
+cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 knitr::include_graphics('./figuras/arboles_1.png')
-install.packages(c("baguette", "rpart.plot", "doParallel", "doFuture"))
+#install.packages(c("baguette", "rpart.plot", "doParallel", "doFuture"))
 ```
 
 - Con este árbol podemos clasificar nuevos hogares.
@@ -111,7 +113,7 @@ de impureza (por ejemplo, coeficiente de Gini).
 
 #### Ejemplo
 Graficamos la medida de impureza para dos clases:
-```{r, fig.width=3, fig.height=2}
+```{r, fig.width=5, fig.height=4}
 impureza <- function(p){
   -(p*log(p) + (1-p)*log(1-p))
 }
@@ -360,7 +362,7 @@ problema de varianza o sesgo?
 En el método de poda usual y selección de complejidad seleccionamos
 la complejidad que minimiza el error de clasificación.
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # esta es una manera de que la validación cruzada
 # corra en paralelo.
 # install.packages("doParallel")
@@ -373,7 +375,7 @@ plan(cluster, workers = cl)
 ```
 
 
-```{r}
+```{r, cache = TRUE}
 set.seed(993) # para hacer reproducible la validación cruzada
 cortes_vc <- vfold_cv(spam_entrena, v = 10)
 # afinamos dos parámetros
@@ -849,13 +851,14 @@ es más grande que la pérdida en varianza.
 6. Cuando usamos bosques aleatorios para estimar probabilidades de clase, como siempre,
 es necesario checar la calibración de esas probabilidades (ver sección de regresión logística).
 
-### Ejemplo
+### Ejemplo {-}
+
 Regresamos a nuestro ejemplo de spam. Intentemos con 500 árboles, y 
 6 variables (de 58 variables) para escoger como candidatos en cada corte:
 
 ```{r, warning=FALSE, message=FALSE}
 spam_bosque <- rand_forest(mtry = 6, trees = 1000) %>% 
-  set_engine("ranger") %>% 
+  set_engine("ranger", importance = "permutation") %>% 
   set_mode("classification")
 # flujo
 spam_flujo_2 <- workflow() %>% 
@@ -922,9 +925,8 @@ ggplot(roc_tbl,
   geom_point(size= 0.5) + geom_path()
 ```
 
---------
 
-### Más detalles de bosques aleatorios.
+### Más detalles de bosques aleatorios {-}
 
 Los bosques aleatorios, por su proceso de construcción, tienen aspectos interesantes.
 
@@ -1003,6 +1005,7 @@ $$\hat{Err}_{oob} = \frac{1}{n} \sum_{i=1}^n (y^{(i)} - y_{oob}^{(i)})^2$$
 2. Clasificación (error de clasificación)
 $$\hat{Err}_{oob} = \frac{1}{n}\sum_{i=1}^n I(y^{(i)} = y_{oob}^{(i)})$$
 
+  La estimación OOB del error es conceptualmente similar a la de validación cruzada.
 ```
 
 
@@ -1022,13 +1025,14 @@ Para el ejemplo de spam, podemos ver el error OOB:
 bosque
 ```
 
-Que comparamos con el score de brier de prueba:
+Que comparamos con el score de brier y devianza de prueba:
 ```{r}
 score_brier <- function(y, p){
     mean((y - p)^2)
 }
 prob_pred <- predict(bosque, spam_prueba, type = "prob")[[".pred_spam"]]
 score_brier(spam_prueba$spam == "spam", prob_pred)
+mn_log_loss_vec(factor(spam_prueba$spam, levels = c("spam", "no_spam")), prob_pred)
 ```
 
 Para calcular otras medidas OOB, podemos extraer directamente las predicciones OOB:
@@ -1051,3 +1055,381 @@ Que comparamos con el error de prueba:
 tab <- table(prob_pred> 0.5, spam_prueba$spam) %>% prop.table() %>% round(3)
 1-sum(diag(tab))
 ```
+
+
+## Calibración de probabilidades
+
+Finalmente, podemos checar la calibración de nuestro bosque:
+
+```{r}
+calibracion_tbl <- tibble(obs = spam_prueba$spam,
+                          proba = prob_pred) %>% 
+  mutate(y = ifelse(obs == "spam", 1, 0))
+calibracion_gpos <- calibracion_tbl %>% 
+    mutate(proba_grupo = cut(proba, 
+      quantile(proba, seq(0, 1, 0.1)), include.lowest = TRUE)) %>% 
+    group_by(proba_grupo) %>% 
+    summarise(prob_media = mean(proba), 
+              n = n(),
+              obs = sum(y), .groups = "drop") %>% 
+    mutate(obs_prop = (obs + 2) / (n + 4), 
+           inferior = qbeta(0.05, obs + 2,  n - obs + 4),
+           superior = qbeta(0.95, obs + 2,  n - obs + 4))
+calibracion_gpos
+```
+
+```{r}
+ggplot(calibracion_gpos, aes(x = prob_media, y = obs_prop, ymin = inferior, ymax = superior)) +
+  geom_abline() +
+  geom_linerange() +
+  geom_point(colour = "red") 
+```
+
+y vemos que nuestro modelo no tiene una calibración no muy buena: las probabilidades
+obtenidas del bosque están algo encogidas hacia el centro: son algo "subconfiadas".
+
+- Podemos intentar un bosque con distintos parámetros: específicamente número mínimo de casos por nodo terminal, y distinto número de *mtry*.
+- Podemos calibrar las probabilidades de este modelo usando regresión isotónica o regresión logística con splines no decrecientes. 
+
+Vamos a ver la segunda técnica. En primer lugar, tendremos que separar nuestra
+de muestra de prueba en dos partes: una de calibración, y otra de evaluación:
+
+```{r}
+set.seed(12441)
+indice_calib <- sample(1:length(prob_pred), length(prob_pred)*0.5)
+prop_bosque_calib <- prob_pred[indice_calib]
+prop_bosque_eval <- prob_pred[-indice_calib]
+y_calib <- spam_prueba$spam[indice_calib]
+y_eval <- spam_prueba$spam[-indice_calib]
+```
+
+Ahora construimos una base de splines no decrecientes usando la muestra
+de calibración:
+
+```{r, fig.width = 4, fig.height = 3}
+library(splines2)
+logit <- function(p) log(p / (1- p))
+# base de splines no decrecientes, en logit:
+mediana <- median(prop_bosque_calib)
+base_splines <- iSpline(prop_bosque_calib, knots = mediana,
+                        Boundary.knots = c(0,1),
+                        degree = 3)
+matplot(prop_bosque_calib, base_splines, cex = 0.2)
+```
+
+Y hacemos una regresión de $y$ en función de la base de splines
+(que son derivados de *prop_bosque*). La función que transforma las
+probabilidades es:
+
+```{r, fig.width =4, fig.height = 3}
+dat_calib <- as_tibble(base_splines) %>% 
+  mutate(y_calib = ifelse(y_calib == "spam", 1, 0))
+# con regresión logística obtendremos probabilidades:
+modelo_calib <- glm(y_calib ~ +., dat_calib, family = "binomial")
+prob_calib <- fitted(modelo_calib)
+qplot(prop_bosque_calib, prob_calib)
+```
+
+Ahora evaluamos la calibración:
+
+```{r, fig.width =8, fig.height = 3, message = FALSE, warning = FALSE}
+base_splines_eval <- iSpline(prop_bosque_eval, knots = mediana, 
+                             Boundary.knots = c(0, 1), degree = 3)
+# obtener probabilidades calibradas para evaluacion
+probs_calibradas <- predict(modelo_calib, as_tibble(base_splines_eval), 
+                            type = "response")
+calib_tbl <- tibble(proba = probs_calibradas, 
+                    y = ifelse(y_eval== "spam", 1, 0))
+calibracion_gpos <- calib_tbl %>% 
+    mutate(proba_grupo = cut(proba, 
+      quantile(proba, seq(0, 1, 0.1)), include.lowest = TRUE)) %>% 
+    group_by(proba_grupo) %>% 
+    summarise(prob_media = mean(proba), 
+              n = n(),
+              obs = sum(y), .groups = "drop") %>% 
+    mutate(obs_prop = (obs + 2) / (n + 4), 
+           inferior = qbeta(0.05, obs + 2,  n - obs + 4),
+           superior = qbeta(0.95, obs + 2,  n - obs + 4))
+calibracion_gpos
+```
+
+```{r}
+ggplot(calibracion_gpos, aes(x = prob_media, y = obs_prop, ymin = inferior, ymax = superior)) +
+  geom_abline() +
+  geom_linerange() +
+  geom_point(colour = "red") 
+```
+
+
+El score de Brier y la log pérdida con las probabilidades calibradas es:
+
+```{r}
+score_brier(y_eval == "spam", probs_calibradas)
+mn_log_loss_vec(y_eval, estimate = 1 - probs_calibradas)
+```
+
+
+**Observaciones**:
+
+
+1. Una desventaja de esta técnica es que tenemos que separar conjuntos de calibración
+y evaluación.
+2. Para el caso multiclase, se puede probar el siguiente procedimiento: calibrar
+cada una de las clases, y después normalizar las probabilidades obtenidas. Este
+procedimiento se puede iterar.
+
+
+## Intervalos y su calibración para bosques
+
+Construir intervalos de predicción es considerablemente más complicado que
+construir predicciones puntuales. Cuando esto es necesario, podemos hacer
+regresión cuantílica usando bosques.
+
+1. En árboles de regresión usuales, cuando queremos hacer predicciones para $x$, 
+aplicamos cada árbol a $x$, obtenemos los datos del nodo terminal donde cae,
+y calculamos el promedio de esas observaciones.. Esta es una 
+estimación del valor esperado de la respuesta condicional a las covariables.
+2. En árboles de regresión cuantílica, repetimos el mismo proceso, pero 
+en lugar de calcular la media, calculamos el cuantil deseado.
+
+Como en **cualquier método**, es **necesario verificar que los intervalos producidos por estos métodos tienen cobertura apropiada**. 
+
+
+#### Ejemplo:
+
+Consideramos el problema de predicción de precio normal de venta de casas. Los 
+hiperparámetros del modelo pueden ser escogidos previamente mediante validación
+cruzada o una muestra de validación:
+
+```{r, message = FALSE, warning = FALSE}
+if(!("rfinterval" %in% rownames(installed.packages()))){
+    devtools::install_github(repo="haozhestat/rfinterval")
+}
+library(rfinterval)
+casas <- read_csv("../datos/houseprices/house-prices.csv")
+set.seed(934)
+casas <- casas %>% filter(!(SaleCondition %in% c("Family", "Partial", "Abnormal"))) %>% 
+    mutate(GarageQual = ifelse(is.na(GarageQual), "No garage", GarageQual)) %>% 
+    mutate(BsmtQual = ifelse(is.na(BsmtQual), "No basement", BsmtQual)) %>% 
+    mutate(TotalBsmtSF = ifelse(BsmtQual == "No basement", 0, TotalBsmtSF)) 
+casas_entrena <- sample_frac(casas, 0.85)
+casas_prueba <- anti_join(casas, casas_entrena) 
+intervalos_casas <- rfinterval(SalePrice ~ Neighborhood + MSSubClass +
+            OverallQual + OverallCond + YearBuilt + GrLivArea +
+            BsmtQual + TotalBsmtSF + GarageQual + Functional, 
+       method = "quantreg", 
+       params_ranger = list(mtry = 5, num.trees = 1500), 
+       alpha = 0.05, 
+       train_data = casas_entrena, test_data = casas_prueba)
+```
+
+```{r}
+intervalos <- intervalos_casas$quantreg_interval
+preds <- intervalos_casas$testPred
+intervalos$SalePrice <- casas_prueba$SalePrice
+intervalos$area <- casas_prueba$GrLivArea
+intervalos$pred <- preds
+ggplot(intervalos, aes(x = pred, ymin = lower, ymax = upper, y = SalePrice)) +
+    geom_abline() +
+    geom_linerange(colour = "gray") +
+    geom_point(colour = "red", size = 1, alpha = 0.5)
+```
+
+```{r}
+intervalos %>% 
+    summarise(cobertura = mean(SalePrice < upper & SalePrice > lower),
+              cobertura_sup = mean(SalePrice < upper),
+              cobertura_inf = mean(SalePrice > lower)) %>% 
+    mutate_if(is.numeric, ~ round(.x, 3))
+```
+
+Los intervalos tienen cobertura razonablemente cercana a la nominal.
+
+
+```{r}
+ggplot(intervalos, aes(x = area, ymin = lower, ymax = upper, y = SalePrice)) +
+    geom_point(colour = "red") +
+    geom_linerange(colour = "gray") + scale_x_log10()
+```
+
+
+
+
+
+## Importancia de variables 
+
+Usando muestras bootstrap y error OOB, es posible tener mediciones útiles de la
+importancia de una variable en el modelo en un bosque aleatorio (todo esto también
+fue inventado por Breiman).
+
+En primer lugar, definir qué significa que una variable sea *importante* en
+un determinado problema no es trivial. El primer punto que consideramos es
+que intentaremos medir la importancia desde el punto de vista de un modelo: es decir,
+queremos saber qué tanto "influye" cada variable en las predicciones y su calidad.
+
+Algunos primeros enfoques son (sólo discutiremos los primeros dos aquí):
+
+- Si quitamos una variable, construimos un nuevo modelo, y el error de predicción se degrada, la variable es importante.
+- Una variable es importante cuando las predicciones del modelo se degradan cuando quitamos información de esta variable, o introducimos ruido en esa variable.
+- Si las predicciones cambian mucho cuando una variable cambia, entonces la variable es importante.
+
+El primer enfoque no se refiere específicamente al modelo dado. Tiene el defecto
+de que una variable puede tener información predictiva, que el modelo utiliza, y sin
+embargo, si quitamos la variable y ajustamos un nuevo modelo, otras variables podrían
+encargarse del trabajo que estaba haciendo en nuestro modelo original: por ejemplo,
+con variables correlacionadas.
+
+Para evaluar un modelo dado, el segundo enfoque es mejor y se puede intentar de varias maneras. Para modelos basados en árboles, por ejemplo, podríamos ver qué pasa con las predicciones, por ejemplo, cuando cada vez que vemos la variable $x$ en un nodo escogemos
+una de las ramas al azar, en lugar de utilizar el valor real de $x$.
+
+Una manera de implementar esto es el siguiente: 
+
+1. Tenemos un conjunto de datos (incluyendo la respuesta) con el que queremos
+evaluar la importancia de la variable $x$.
+2. Ponemos los datos en el árbol, vemos sus predicciones, y evaluamos el error de predicción.
+3. Ahora permutamos al azar la variable $x$ a lo largo de los casos. Ponemos los datos en el árbol, vemos sus predicciones, y evaluamos el error de predicción nuevamente.
+4. El incremento en error de predicción del caso 2 al caso 3 es una medida de la importancia de la variable $x$.
+5. Podemos repetir este proceso con distintas permutaciones para construir intervalos o errores estándar que nos ayude a interpretar la variabilidad producida por las permutaciones seleccionadas.
+
+Veremos ejemplos de este procedimiento más adelante.
+Por el momento, utilizaremos la implementación clásica para bosques
+aleatorios, aprovechando los datos OOB. La idea de Breiman original de
+Breiman es como sigue:
+
+Consideramos un árbol $T^*_j$ del bosque, con muestra bootstrap ${\mathcal L}^*_i$. Calculamos
+un tipo de error out-of-bag para el árbol, promediando sobre todos los elementos de ${\mathcal L}$ que no están en ${\mathcal L}^*_i$
+
+$$\widehat{Err}_{oob}(T^*_j) = \frac{1}{A_j}\sum_{(x^{(i)}, y^{(i)}) \in {\mathcal L} -{\mathcal L}^*_i} L(y^{(i)}, T^*_j(x^{(i)}))$$
+donde $A_j$ es el tamaño de ${\mathcal L} -{\mathcal L}^*_i$.
+
+Ahora *permutamos* al azar la variable $X_k$ en la muestra OOB ${\mathcal L} -{\mathcal L}^*_i$.
+Describimos esta operación como $x^{(i)} \to x^{(i)}_k$.
+Calculamos el error nuevamente:
+
+$$\widehat{Err}_{k}(T^*_j) = \frac{1}{A_j}\sum_{(x^{(i)}, y^{(i)}) \in {\mathcal L} -{\mathcal L}^*_i} L(y^{(i)}, T^*_j(x_k^{(i)}))$$
+Ahora calculamos la degradación del error out-of-bag debido a la permutación:
+$$ D_k(T_j^*) = \widehat{Err}_{k}(T^*_j) - \widehat{Err}_{oob}(T^*_j) $$
+
+Y promediamos sobre el bosque entero
+$$I_k =\frac{1}{B} \sum_{j=1}^B D_k(T^*_j)$$
+y a esta cantidad le llamamos la **importancia** (basada en permutaciones) de la variable $k$ en el bosque
+aleatorio. Es el decremento promedio de capacidad predictiva cuando "quitamos" la variable
+$X_k$.
+
+
+**Observaciones**
+
+- No podemos "quitar" la variable durante el entrenamiento de los árboles, pues entonces otras variables pueden hacer su trabajo, subestimando su importancia.
+- No podemos "quitar" la variable al medir el error OOB, pues se necesitan todas las
+variables para poder clasificar con cada árbol (pues cada árbol usa esa variable, o tiene
+probabilidad de usarla).
+- Pero podemos permutar a la hora calcular el error OOB (y no durante el entrenamiento), 
+rompiendo la relación que
+hay entre $X_k$ y la variable respuesta.
+- Aunque este método lo podemos aplicar para cualquier modelo, la interpretación 
+es más interesante con *ensembles* como bosques aleatorios, pues en cada corte damos
+oportunidad a distintas variables de entrar en el modelo. Para un sólo arbol es menos
+útil, por el problema del "enmascaramiento".
+
+Otra manera de medir importancia para árboles de regresión y clasificación es mediante el decremento de impureza promedio sobre el bosque, para cada variable.
+
+- Cada vez que una variable aporta un corte en un árbol, la impureza del árbol
+disminuye.
+- Sumamos, en cada árbol, todos estos decrementos de impureza (cada vez que aparece
+la variable en un corte)
+- Finalmente, promediamos esta medida de importancia dentro de cada árbol sobre
+el bosque completo.
+- Repetimos para cada variable.
+
+Para árboles de clasificación, usualmente se toma la importancia de Gini, que está basada in la impureza de Gini
+en lugar de la entropía. La impureza de Gini está dada por
+$$I_G(p_1, \ldots, p_K) = \sum_{k=1}^K p_k(1-p_k),$$
+que es similar a la impureza de entropía que discutimos en la construcción 
+de árboles:
+$$I_G(p_1, \ldots, p_K) = \sum_{k=1}^K -p_k\log (p_k),$$
+Nótese por ejemplo que ambas toman su valor máximo en $p_k=1/K$ (distribución más
+uniforme posible sobre las clases), y que son iguales a cero cuando $p_k=1$ para
+alguna $k$. 
+
+#### Ejemplo{-}
+En nuestro ejemplo de spam
+```{r}
+library(vip)
+bosque %>% vip(num_features = 30)
+```
+
+#### Ejemplo{-}
+En el ejemplo de casas:
+```{r}
+bosque_casas <- ranger::ranger(SalePrice ~ Neighborhood + MSSubClass +
+            LotArea + OverallQual + OverallCond + YearBuilt + GrLivArea +
+              GarageArea + Street + CentralAir +
+            BsmtQual + TotalBsmtSF + GarageQual + GarageCars + KitchenQual + 
+            Functional, data = casas_entrena, 
+            mtry = 5, num.trees = 3000, importance = "permutation")
+importancias_casas_tbl <- ranger::importance(bosque_casas) %>% enframe() %>% 
+    mutate(name = fct_reorder(name, value)) %>% 
+    mutate(valor_porc = 100 * value / bosque_casas$prediction.error)
+ggplot(importancias_casas_tbl, aes(x = name, y = valor_porc)) + 
+    geom_point() + coord_flip() + ylab("Incremento % de ECM")
+```
+
+
+**Observaciones**:
+
+- Este análisis nos da una idea de cómo funciona el bosque construido y cómo depende de variables individuales. 
+- Puede adaptarse a cualquier método de predicción. Un equivalente sería hacerlo con las predicciones de validación cruzada o con datos de validación, en lugar de usar los datos OOB.
+
+Sin embargo, cuando se usa *como método de selección de variables* hay que tener
+algunos cuidados:
+
+- Cuando tenemos conjuntos de variables correlacionadas, estas medidas tienden a diluir su importancia entre ellas.
+- Variables de cardinalidad alta tienden a tener importancias más altas (especialmente cuando se usa la importancia de Gini (impureza)).
+- Algunas variables con importancia alta puede depender de interacciones con otras variables quizá menos importantes.
+
+
+
+---
+
+### Ajustando árboles aleatorios.
+
+- El parámetro más importante de afinar es usualmente $m$, el número de variables que se escogen
+al azar en cada nodo.
+- A veces podemos obtener algunas ventajas de afinar el número mínimo de observaciones por
+nodo terminal y/o el número mínimo de observaciones por nodo para considerar hacer cortes adicionales
+- Usualmente corremos tantos árboles como podamos (cientos, miles), o hasta que se
+estabiliza el error. Aumentar más arboles rara vez producen sobreajuste adicional (aunque esto no 
+quiere decir que los bosques aleatorios no puedan sobreajustar)
+
+**Implementaciones**: hay distintas implementaciones con diferencias considerables.
+En nuestros ejemplos usamos el paquete *ranger*. En esta implementación, por ejemplo, las variables cualitativas se toman como ordenadas (alfabético si no es un factor, en el
+orden de los factores o, ordenadas según la variable respuesta si se usa la opción *respect.unordered.factors = TRUE*), ver documentación y referencias asociadas. 
+Se puede usar esta última
+opción y el bosque resultante no necesariamente agrupa niveles de la variable.
+
+
+
+### Ventajas y desventajas de bosques aleatorios
+
+Ventajas:
+
+- Entre los métodos estándar, es en general uno de los 
+métodos más competitivos: usualmente tienen tasas muy buenas de error de predicción.
+- Los bosques aleatorios son relativamente fáciles de entrenar (ajustar usualmente 1 o 2 parámetros) y rápidos de ajustar. 
+- Heredan las ventajas de los árboles: no hay necesidad de transformar variables o construir interacciones (pues los árboles pueden descubrirlas en parte), son robustos a valores atípicos en las variables de entrada.
+- Igual que con los árboles, las predicciones de los bosques siempre están en el rango
+de las variables de predicción (no extrapolan)
+
+Desventajas:
+- Pueden ser lentos en la predicción, pues muchas veces 
+requieren evaluar grandes cantidades de árboles.
+- No es tan simple adaptarlos a distintos tipos de problemas (por ejemplo, como
+redes neuronales, que combinando capas podemos construir modelos ad-hoc a problemas
+particulares).
+- La falta de extrapolación puede ser también un defecto (por ejemplo, cuando
+una estructura lineal aproximada es apropiadas).
+
+
+
+
+
