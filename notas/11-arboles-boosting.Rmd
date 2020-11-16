@@ -606,7 +606,11 @@ subgrid_tbl <- subgrid_tbl %>% mutate(eval_log = eval_log)
 eval_tbl <- subgrid_tbl %>% unnest() %>% 
     filter(iter == 500, tipo == "test") %>% 
     arrange(mean)
-eval_tbl %>% select(-objective, -iter, -tipo, -metric)
+```
+
+
+```{r}
+eval_tbl %>% select(-objective, -iter, -tipo, -metrica)
 ```
 
 **Observación**: muchas veces es necesario correr más iteraciones de las
