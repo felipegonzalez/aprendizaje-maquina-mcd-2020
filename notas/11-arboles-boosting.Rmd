@@ -624,7 +624,7 @@ considerablemente.
 Usando esta información podemos seleccionar un juego de parámetros y
 correr más iteraciones. Después de algunos experimentos adicionales, obtenemos:
 
-```{r modfinal}
+```{r modfinal, cache = TRUE}
 set.seed(121)
 params = list(
     objective = "reg:squarederror",
