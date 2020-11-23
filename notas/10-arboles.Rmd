@@ -1353,7 +1353,7 @@ alguna $k$.
 
 #### Ejemplo{-}
 En nuestro ejemplo de spam
-```{r}
+```{r, message=FALSE}
 library(vip)
 bosque %>% vip(num_features = 30)
 ```
